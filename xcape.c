@@ -24,7 +24,6 @@
 #include <signal.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <semaphore.h>
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <X11/extensions/record.h>
