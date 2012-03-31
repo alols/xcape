@@ -1,0 +1,17 @@
+XCAPE
+=====
+
+xcape runs as a daemon and intercepts left control key events. If the left
+control key is pressed and released on its own, it generates Esc key
+events. Thats it! Other than that it does nothing!
+This makes more sense if you have remapped your Caps Lock key to Control.
+Future versions of this program might do that mapping for you, but for now
+this is something that you have to do yourself.
+If you don't understand why anybody would want this, I'm guessing that Vim
+is not your favourite text editor ;)
+
+Find the latest version at
+https://github.com/alols/xcape
+
+The author can be reached at
+albin dot olsson at gmail dot com
