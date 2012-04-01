@@ -11,11 +11,13 @@ If you don't understand why anybody would want this, I'm guessing that Vim
 is not your favourite text editor ;)
 
 Here are some minimal building instructions:
+<pre>
 $ sudo apt-get install git gcc make libx11-dev libxtst-dev
 $ mkdir xcape
 $ cd xcape
 $ git clone https://github.com/alols/xcape.git .
 $ make
+</pre>
 
 Find the latest version at
 https://github.com/alols/xcape
