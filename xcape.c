@@ -106,7 +106,9 @@ int main (int argc, char **argv)
         exit (EXIT_FAILURE);
     }
 
-    sigfillset(&self->sigset);
+    sigemptyset (&self->sigset);
+    sigaddset (&self->sigset, SIGINT);
+    sigaddset (&self->sigset, SIGTERM);
     pthread_sigmask (SIG_BLOCK, &self->sigset, NULL);
 
     pthread_create (&self->sigwait_thread,
@@ -193,7 +195,8 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
                 "Intercepted key event %d, key code %d\n",
                 key_event, key_code);
 
-        if (XkbKeycodeToKeysym(self->ctrl_conn, key_code, 0, 0) == XK_Control_L)
+        if (XkbKeycodeToKeysym (self->ctrl_conn, key_code, 0, 0)
+                == XK_Control_L)
         {
             if (key_event == KeyPress)
             {
