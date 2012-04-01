@@ -28,6 +28,7 @@
 #include <X11/keysym.h>
 #include <X11/extensions/record.h>
 #include <X11/extensions/XTest.h>
+#include <X11/XKBlib.h>
 
 
 /************************************************************************
@@ -38,7 +39,6 @@ typedef struct _XCape_t
     Display *data_conn;
     Display *ctrl_conn;
     XRecordContext record_ctx;
-    KeyCode control_key;
     KeyCode escape_key;
     pthread_t sigwait_thread;
     sigset_t sigset;
@@ -87,8 +87,6 @@ int main (int argc, char **argv)
 
     self->escape_key  = XKeysymToKeycode (self->ctrl_conn,
             XK_Escape);
-    self->control_key = XKeysymToKeycode (self->ctrl_conn,
-            XK_Control_L);
 
     if (!XQueryExtension (self->ctrl_conn,
                 "XTEST", &dummy, &dummy, &dummy))
@@ -99,6 +97,12 @@ int main (int argc, char **argv)
     if (!XRecordQueryVersion (self->ctrl_conn, &dummy, &dummy))
     {
         fprintf (stderr, "Failed to obtain xrecord version\n");
+        exit (EXIT_FAILURE);
+    }
+    if (!XkbQueryExtension (self->ctrl_conn, &dummy, &dummy, 
+            &dummy, &dummy, &dummy))
+    {
+        fprintf (stderr, "Failed to obtain xkb version\n");
         exit (EXIT_FAILURE);
     }
 
@@ -189,7 +193,7 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
                 "Intercepted key event %d, key code %d\n",
                 key_event, key_code);
 
-        if (key_code == self->control_key)
+        if (XkbKeycodeToKeysym(self->ctrl_conn, key_code, 0, 0) == XK_Control_L)
         {
             if (key_event == KeyPress)
             {
