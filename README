@@ -1,9 +1,9 @@
 XCAPE
 =====
 
-xcape runs as a daemon and intercepts left control key events. If the left
-control key is pressed and released on its own, it generates Esc key
-events. Thats it! Other than that it does nothing!
+xcape runs as a daemon and intercepts the Control key. If the 
+Control key is pressed and released on its own, it will generate an Escape
+key event.
 This makes more sense if you have remapped your Caps Lock key to Control.
 Future versions of this program might do that mapping for you, but for now
 this is something that you have to do yourself.
