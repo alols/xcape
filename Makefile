@@ -1,3 +1,5 @@
+INSTALL=install
+PREFIX=/usr
 
 TARGET := xcape
 
@@ -8,6 +10,9 @@ LDFLAGS += -pthread
 
 $(TARGET): xcape.c
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+install:
+	$(INSTALL) -Dm 755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/$(TARGET)
 
 clean:
 	rm $(TARGET)
