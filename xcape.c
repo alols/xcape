@@ -116,7 +116,7 @@ int main (int argc, char **argv)
 
     XRecordRange *rec_range = XRecordAllocRange();
     rec_range->device_events.first = KeyPress;
-    rec_range->device_events.last = KeyRelease;
+    rec_range->device_events.last = ButtonRelease;
     XRecordClientSpec client_spec = XRecordAllClients;
 
     self->record_ctx = XRecordCreateContext (self->ctrl_conn,
@@ -183,8 +183,9 @@ void *sig_handler (void *user_data)
 void intercept (XPointer user_data, XRecordInterceptData *data)
 {
     XCape_t *self = (XCape_t*)user_data;
-    static Bool ctrl_pressed = False;
-    static Bool ctrl_used    = False;
+    static Bool ctrl_pressed  = False;
+    static Bool ctrl_used     = False;
+    static Bool mouse_pressed = False;
 
     if (data->category == XRecordFromServer)
     {
@@ -195,35 +196,52 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
                 "Intercepted key event %d, key code %d\n",
                 key_event, key_code);
 
-        if (XkbKeycodeToKeysym (self->ctrl_conn, key_code, 0, 0)
-                == XK_Control_L)
+        if (key_event == ButtonPress)
         {
-            if (key_event == KeyPress)
-            {
-                if (self->debug) fprintf (stdout, "Control pressed!\n");
-                ctrl_pressed = True;
-            }
-            else
-            {
-                if (self->debug) fprintf (stdout, "Control released!\n");
-                if (ctrl_used == False)
-                {
-                    if (self->debug) fprintf (stdout,
-                            "Generating ESC!\n");
-
-                    XTestFakeKeyEvent (self->ctrl_conn,
-                            self->escape_key, True, 0);
-                    XTestFakeKeyEvent (self->ctrl_conn,
-                            self->escape_key, False, 0);
-                    XFlush (self->ctrl_conn);
-                }
-                ctrl_pressed = False;
-                ctrl_used = False;
-            }
+            ctrl_used = ctrl_pressed;
+            mouse_pressed = True;
         }
-        else if (ctrl_pressed && key_event == KeyPress)
+        else if (key_event == ButtonRelease)
         {
-            ctrl_used = True;
+            mouse_pressed = False;
+        }
+        else
+        {
+            if (XkbKeycodeToKeysym (self->ctrl_conn, key_code, 0, 0)
+                    == XK_Control_L)
+            {
+                if (key_event == KeyPress)
+                {
+                    if (self->debug) fprintf (stdout, "Control pressed!\n");
+                    ctrl_pressed = True;
+
+                    if (mouse_pressed)
+                    {
+                        ctrl_used = True;
+                    }
+                }
+                else
+                {
+                    if (self->debug) fprintf (stdout, "Control released!\n");
+                    if (ctrl_used == False)
+                    {
+                        if (self->debug) fprintf (stdout,
+                                "Generating ESC!\n");
+
+                        XTestFakeKeyEvent (self->ctrl_conn,
+                                self->escape_key, True, 0);
+                        XTestFakeKeyEvent (self->ctrl_conn,
+                                self->escape_key, False, 0);
+                        XFlush (self->ctrl_conn);
+                    }
+                    ctrl_pressed = False;
+                    ctrl_used = False;
+                }
+            }
+            else if (ctrl_pressed && key_event == KeyPress)
+            {
+                ctrl_used = True;
+            }
         }
     }
 
