@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/time.h>
 #include <signal.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -43,6 +44,7 @@ typedef struct _XCape_t
     pthread_t sigwait_thread;
     sigset_t sigset;
     Bool debug;
+    struct timeval down_at;
 } XCape_t;
 
 
@@ -214,6 +216,7 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
                 {
                     if (self->debug) fprintf (stdout, "Control pressed!\n");
                     ctrl_pressed = True;
+                    gettimeofday (&self->down_at, NULL);
 
                     if (mouse_pressed)
                     {
@@ -225,14 +228,24 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
                     if (self->debug) fprintf (stdout, "Control released!\n");
                     if (ctrl_used == False)
                     {
-                        if (self->debug) fprintf (stdout,
-                                "Generating ESC!\n");
+                        struct timeval timev, ms650 = {
+                            .tv_sec = 0,
+                            .tv_usec = 650000
+                        };
+                        gettimeofday (&timev, NULL);
+                        timersub (&timev, &self->down_at, &timev);
 
-                        XTestFakeKeyEvent (self->ctrl_conn,
-                                self->escape_key, True, 0);
-                        XTestFakeKeyEvent (self->ctrl_conn,
-                                self->escape_key, False, 0);
-                        XFlush (self->ctrl_conn);
+                        if (timercmp (&timev, &ms650, <))
+                        {
+                            if (self->debug) fprintf (stdout,
+                                    "Generating ESC!\n");
+
+                            XTestFakeKeyEvent (self->ctrl_conn,
+                                    self->escape_key, True, 0);
+                            XTestFakeKeyEvent (self->ctrl_conn,
+                                    self->escape_key, False, 0);
+                            XFlush (self->ctrl_conn);
+                        }
                     }
                     ctrl_pressed = False;
                     ctrl_used = False;
