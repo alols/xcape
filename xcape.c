@@ -275,11 +275,15 @@ KeyMap_t* parse_token(Display *dpy, char *token) {
     if ((p = strchr(token, '=')) != NULL) {
         *p = '\0';
         km = calloc(1, sizeof(KeyMap_t));
-        if ((ks = XStringToKeysym(token)) == NoSymbol)
+        if ((ks = XStringToKeysym(token)) == NoSymbol) {
+            fprintf(stderr, "Cannot parse %s\n", token);
             return NULL;
+        }
         km->from = ks;
-        if ((ks = XStringToKeysym(p+1)) == NoSymbol)
+        if ((ks = XStringToKeysym(p+1)) == NoSymbol) {
+            fprintf(stderr, "Cannot parse %s\n", p+1);
             return NULL;
+        }
         km->to = XKeysymToKeycode(dpy, ks);
     }
     return km;
