@@ -270,18 +270,19 @@ static
 KeyMap_t* parse_token(Display *dpy, char *token) {
     KeyMap_t *km = NULL;
     KeySym ks;
-    char *p;
+    char *from, *to;
 
-    if ((p = strchr(token, '=')) != NULL) {
-        *p = '\0';
+    to = token;
+    from = strsep(&to, "=");
+    if (from != NULL) {
         km = calloc(1, sizeof(KeyMap_t));
-        if ((ks = XStringToKeysym(token)) == NoSymbol) {
+        if ((ks = XStringToKeysym(from)) == NoSymbol) {
             fprintf(stderr, "Cannot parse %s\n", token);
             return NULL;
         }
         km->from = ks;
-        if ((ks = XStringToKeysym(p+1)) == NoSymbol) {
-            fprintf(stderr, "Cannot parse %s\n", p+1);
+        if ((ks = XStringToKeysym(to)) == NoSymbol) {
+            fprintf(stderr, "Cannot parse %s\n", to);
             return NULL;
         }
         km->to = XKeysymToKeycode(dpy, ks);
@@ -296,8 +297,7 @@ void parse_mapping (XCape_t *self, char *mapping)
 
     km = self->map = NULL;
     for(;;) {
-        token = strtok(mapping, ";");
-        mapping = NULL;
+        token = strsep(&mapping, ";");
         if (token == NULL)
             break;
         nkm = parse_token(self->ctrl_conn, token);
