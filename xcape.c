@@ -35,13 +35,20 @@
 /************************************************************************
  * Internal data types
  ***********************************************************************/
+typedef struct _Key_t
+{
+    KeyCode key;
+    struct _Key_t *next;
+} Key_t;
+
 typedef struct _KeyMap_t
 {
     KeySym from;
-    KeyCode to;
+    Key_t *to_keys;
     Bool used;
     Bool pressed;
     Bool mouse;
+    int  fake;
     struct timeval down_at;
     struct _KeyMap_t *next;
 } KeyMap_t;
@@ -194,44 +201,59 @@ void *sig_handler (void *user_data)
 static
 void handle_key(XCape_t *self, KeyMap_t *key, Bool mouse_pressed, int key_event)
 {
-                if (key_event == KeyPress)
-                {
-                    if (self->debug) fprintf (stdout, "Key pressed!\n");
-                    key->pressed = True;
-                    gettimeofday (&key->down_at, NULL);
+    Key_t *k;
+    KeyCode kk;
 
-                    if (mouse_pressed)
-                    {
-                        key->used = True;
-                    }
+    if (key->fake) {
+        key->fake--;
+        return;
+    }
+
+    kk = XKeysymToKeycode(self->ctrl_conn, key->from);
+    if (key_event == KeyPress)
+    {
+        if (self->debug) fprintf (stdout, "Key pressed!\n");
+        key->pressed = True;
+        gettimeofday (&key->down_at, NULL);
+
+        if (mouse_pressed)
+        {
+            key->used = True;
+        }
+    }
+    else
+    {
+        if (self->debug) fprintf (stdout, "Key released!\n");
+        if (key->used == False)
+        {
+            struct timeval timev, ms650 = {
+                .tv_sec = 0,
+                .tv_usec = 650000
+            };
+            gettimeofday (&timev, NULL);
+            timersub (&timev, &key->down_at, &timev);
+
+            if (timercmp (&timev, &ms650, <))
+            {
+                if (self->debug) fprintf (stdout,
+                        "Generating ESC!\n");
+
+                for (k = key->to_keys; k != NULL; k = k->next) {
+                    XTestFakeKeyEvent (self->ctrl_conn,
+                            k->key, True, 0);
+                    if (kk == k->key)
+                        key->fake += 2;
                 }
-                else
-                {
-                    if (self->debug) fprintf (stdout, "Key released!\n");
-                    if (key->used == False)
-                    {
-                        struct timeval timev, ms650 = {
-                            .tv_sec = 0,
-                            .tv_usec = 650000
-                        };
-                        gettimeofday (&timev, NULL);
-                        timersub (&timev, &key->down_at, &timev);
-
-                        if (timercmp (&timev, &ms650, <))
-                        {
-                            if (self->debug) fprintf (stdout,
-                                    "Generating ESC!\n");
-
-                            XTestFakeKeyEvent (self->ctrl_conn,
-                                    key->to, True, 0);
-                            XTestFakeKeyEvent (self->ctrl_conn,
-                                    key->to, False, 0);
-                            XFlush (self->ctrl_conn);
-                        }
-                    }
-                    key->pressed = False;
-                    key->used = False;
+                for (k = key->to_keys; k != NULL; k = k->next) {
+                    XTestFakeKeyEvent (self->ctrl_conn,
+                            k->key, False, 0);
                 }
+                XFlush (self->ctrl_conn);
+            }
+        }
+        key->used = False;
+        key->pressed = False;
+    }
 }
 
 void intercept (XPointer user_data, XRecordInterceptData *data)
@@ -255,11 +277,14 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
             mouse_pressed = False;
         else
         {
-            for (km = self->map; km != NULL; km = km->next)
+            for (km = self->map; km != NULL; km = km->next) {
                 if (XkbKeycodeToKeysym (self->ctrl_conn, key_code, 0, 0)
                         == km->from) {
                     handle_key(self, km, mouse_pressed, key_event);
+                } else if (km->pressed && key_event == KeyPress) {
+                    km->used = True;
                 }
+            }
         }
     }
 
@@ -269,8 +294,9 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
 static
 KeyMap_t* parse_token(Display *dpy, char *token) {
     KeyMap_t *km = NULL;
+    Key_t *k, *nk;
     KeySym ks;
-    char *from, *to;
+    char *from, *to, *key;
 
     to = token;
     from = strsep(&to, "=");
@@ -281,11 +307,24 @@ KeyMap_t* parse_token(Display *dpy, char *token) {
             return NULL;
         }
         km->from = ks;
-        if ((ks = XStringToKeysym(to)) == NoSymbol) {
-            fprintf(stderr, "Cannot parse %s\n", to);
-            return NULL;
+        km->to_keys = k = NULL;
+        for(;;) {
+            key = strsep(&to, "|");
+            if (key == NULL)
+                break;
+            if ((ks = XStringToKeysym(key)) == NoSymbol) {
+                fprintf(stderr, "Cannot parse %s\n", to);
+                return NULL;
+            }
+            nk = calloc(1, sizeof(Key_t));
+            nk->key = XKeysymToKeycode(dpy, ks);
+            if (k == NULL) {
+                km->to_keys = k = nk;
+            } else {
+                k->next = nk;
+                k = nk;
+            }
         }
-        km->to = XKeysymToKeycode(dpy, ks);
     }
     return km;
 }
