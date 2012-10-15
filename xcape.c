@@ -62,27 +62,23 @@ void intercept (XPointer user_data, XRecordInterceptData *data);
 int main (int argc, char **argv)
 {
     XCape_t *self = malloc (sizeof (XCape_t));
-    int dummy;
+    int dummy, ch;
 
-    if (argc > 1)
-    {
-        if (0 == strncmp(argv[1], "--debug", 7))
-        {
-            self->debug = True;
-        }
-        else
-        {
-            fprintf (stdout, "Usage: %s [--debug]\n", argv[0]);
-            fprintf (stdout,
-                         "Runs as a daemon unless --debug flag is set\n");
-            return EXIT_SUCCESS;
+    self->debug = False;
+    while ((ch = getopt(argc, argv, "d")) != -1) {
+        switch (ch) {
+            case 'd':
+                self->debug = True;
+                break;
+            default:
+                fprintf (stdout, "Usage: %s [-d]\n", argv[0]);
+                fprintf (stdout,
+                        "Runs as a daemon unless -d flag is set\n");
+                return EXIT_SUCCESS;
         }
     }
-    else
-    {
-        self->debug = False;
+    if (self->debug != True)
         daemon (0, 0);
-    }
 
     self->data_conn = XOpenDisplay (NULL);
     self->ctrl_conn = XOpenDisplay (NULL);
