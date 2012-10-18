@@ -21,6 +21,13 @@ Minimal building instructions
     $ git clone https://github.com/alols/xcape.git .
     $ make
 
+Usage
+-----
+    $ xcape -e 'Shift_L=Shift_L|parenleft;Shift_R=Shift_R|parenright;Control_L=Escape'
+
+Will make Left Shift pressed alone generate (, Right shift to generate ) and 
+Left Control generate Escape.
+
 Contact
 -------
 
