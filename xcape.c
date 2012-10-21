@@ -75,6 +75,8 @@ void intercept (XPointer user_data, XRecordInterceptData *data);
 
 KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping);
 
+Key_t *key_add_key (Key_t *keys, KeyCode key);
+
 /************************************************************************
  * Main function
  ***********************************************************************/
@@ -106,7 +108,7 @@ int main (int argc, char **argv)
                 {
                     self->timeout_valid = True;
                     self->timeout.tv_sec = ms / 1000;
-                    self->timeout.tv_usec = (atoi (optarg) % 1000) * 1000;
+                    self->timeout.tv_usec = (ms % 1000) * 1000;
                 }
                 else
                 {
@@ -278,11 +280,12 @@ void handle_key (XCape_t *self, KeyMap_t *key,
 
             if (!self->timeout_valid || timercmp (&timev, &self->timeout, <))
             {
-                if (self->debug) fprintf (stdout,
-                        "Generating ESC!\n");
-
                 for (k = key->to_keys; k != NULL; k = k->next)
                 {
+                    if (self->debug) fprintf (stdout, "Generating %s!\n",
+                            XKeysymToString (XKeycodeToKeysym (self->ctrl_conn,
+                                    k->key, 0)));
+
                     XTestFakeKeyEvent (self->ctrl_conn,
                             k->key, True, 0);
                     self->generated = key_add_key (self->generated, k->key);
@@ -366,7 +369,7 @@ exit:
     XRecordFreeData (data);
 }
 
-KeyMap_t* parse_token (Display *dpy, char *token)
+KeyMap_t *parse_token (Display *dpy, char *token)
 {
     KeyMap_t *km = NULL;
     KeySym    ks;
