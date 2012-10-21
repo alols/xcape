@@ -84,21 +84,24 @@ int main (int argc, char **argv)
     char *mapping = default_mapping;
 
     self->debug = False;
-    while ((ch = getopt(argc, argv, "de:")) != -1) {
-        switch (ch) {
-            case 'd':
-                self->debug = True;
-                break;
-            case 'e':
-                mapping = optarg;
-                break;
-            default:
-                fprintf (stdout, "Usage: %s [-d] [-e <mapping>]\n", argv[0]);
-                fprintf (stdout,
-                        "Runs as a daemon unless -d flag is set\n");
-                return EXIT_SUCCESS;
+    while ((ch = getopt (argc, argv, "de:")) != -1)
+    {
+        switch (ch)
+        {
+        case 'd':
+            self->debug = True;
+            break;
+        case 'e':
+            mapping = optarg;
+            break;
+        default:
+            fprintf (stdout, "Usage: %s [-d] [-e <mapping>]\n", argv[0]);
+            fprintf (stdout,
+                    "Runs as a daemon unless -d flag is set\n");
+            return EXIT_SUCCESS;
         }
     }
+
     if (self->debug != True)
         daemon (0, 0);
 
@@ -123,7 +126,7 @@ int main (int argc, char **argv)
         exit (EXIT_FAILURE);
     }
 
-    parse_mapping(self, mapping);
+    parse_mapping (self, mapping);
 
     sigemptyset (&self->sigset);
     sigaddset (&self->sigset, SIGINT);
@@ -198,21 +201,23 @@ void *sig_handler (void *user_data)
     return NULL;
 }
 
-static
-void handle_key(XCape_t *self, KeyMap_t *key, Bool mouse_pressed, int key_event)
+void handle_key (XCape_t *self, KeyMap_t *key,
+        Bool mouse_pressed, int key_event)
 {
     Key_t *k;
     KeyCode kk;
 
-    if (key->fake) {
+    if (key->fake)
+    {
         key->fake--;
         return;
     }
 
-    kk = XKeysymToKeycode(self->ctrl_conn, key->from);
+    kk = XKeysymToKeycode (self->ctrl_conn, key->from);
     if (key_event == KeyPress)
     {
         if (self->debug) fprintf (stdout, "Key pressed!\n");
+
         key->pressed = True;
         gettimeofday (&key->down_at, NULL);
 
@@ -238,13 +243,15 @@ void handle_key(XCape_t *self, KeyMap_t *key, Bool mouse_pressed, int key_event)
                 if (self->debug) fprintf (stdout,
                         "Generating ESC!\n");
 
-                for (k = key->to_keys; k != NULL; k = k->next) {
+                for (k = key->to_keys; k != NULL; k = k->next)
+                {
                     XTestFakeKeyEvent (self->ctrl_conn,
                             k->key, True, 0);
                     if (kk == k->key)
                         key->fake += 2;
                 }
-                for (k = key->to_keys; k != NULL; k = k->next) {
+                for (k = key->to_keys; k != NULL; k = k->next)
+                {
                     XTestFakeKeyEvent (self->ctrl_conn,
                             k->key, False, 0);
                 }
@@ -277,11 +284,15 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
             mouse_pressed = False;
         else
         {
-            for (km = self->map; km != NULL; km = km->next) {
+            for (km = self->map; km != NULL; km = km->next)
+            {
                 if (XkbKeycodeToKeysym (self->ctrl_conn, key_code, 0, 0)
-                        == km->from) {
-                    handle_key(self, km, mouse_pressed, key_event);
-                } else if (km->pressed && key_event == KeyPress) {
+                        == km->from)
+                {
+                    handle_key (self, km, mouse_pressed, key_event);
+                }
+                else if (km->pressed && key_event == KeyPress)
+                {
                     km->used = True;
                 }
             }
@@ -291,36 +302,49 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
     XRecordFreeData (data);
 }
 
-static
-KeyMap_t* parse_token(Display *dpy, char *token) {
+KeyMap_t* parse_token(Display *dpy, char *token)
+{
     KeyMap_t *km = NULL;
-    Key_t *k, *nk;
-    KeySym ks;
-    char *from, *to, *key;
+    Key_t    *k, *nk;
+    KeySym    ks;
+    char      *from, *to, *key;
 
     to = token;
-    from = strsep(&to, "=");
-    if (from != NULL) {
-        km = calloc(1, sizeof(KeyMap_t));
-        if ((ks = XStringToKeysym(from)) == NoSymbol) {
-            fprintf(stderr, "Cannot parse %s\n", token);
+    from = strsep (&to, "=");
+    if (from != NULL)
+    {
+        km = calloc (1, sizeof (KeyMap_t));
+
+        if ((ks = XStringToKeysym (from)) == NoSymbol)
+        {
+            fprintf (stderr, "Cannot parse %s\n", token);
             return NULL;
         }
-        km->from = ks;
+
+        km->from    = ks;
         km->to_keys = k = NULL;
-        for(;;) {
-            key = strsep(&to, "|");
+
+        for(;;)
+        {
+            key = strsep (&to, "|");
             if (key == NULL)
                 break;
-            if ((ks = XStringToKeysym(key)) == NoSymbol) {
-                fprintf(stderr, "Cannot parse %s\n", to);
+
+            if ((ks = XStringToKeysym (key)) == NoSymbol)
+            {
+                fprintf (stderr, "Cannot parse %s\n", to);
                 return NULL;
             }
-            nk = calloc(1, sizeof(Key_t));
-            nk->key = XKeysymToKeycode(dpy, ks);
-            if (k == NULL) {
+
+            nk = calloc (1, sizeof(Key_t));
+            nk->key = XKeysymToKeycode (dpy, ks);
+
+            if (k == NULL)
+            {
                 km->to_keys = k = nk;
-            } else {
+            }
+            else
+            {
                 k->next = nk;
                 k = nk;
             }
@@ -331,19 +355,25 @@ KeyMap_t* parse_token(Display *dpy, char *token) {
 
 void parse_mapping (XCape_t *self, char *mapping)
 {
-    char *token;
+    char     *token;
     KeyMap_t *km, *nkm;
 
     km = self->map = NULL;
-    for(;;) {
-        token = strsep(&mapping, ";");
+
+    for(;;)
+    {
+        token = strsep (&mapping, ";");
         if (token == NULL)
             break;
-        nkm = parse_token(self->ctrl_conn, token);
-        if (nkm != NULL) {
+
+        nkm = parse_token (self->ctrl_conn, token);
+
+        if (nkm != NULL)
+        {
             if (km == NULL)
                 self->map = km = nkm;
-            else {
+            else
+            {
                 km->next = nkm;
                 km = nkm;
             }
