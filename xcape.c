@@ -122,9 +122,6 @@ int main (int argc, char **argv)
         }
     }
 
-    if (self->debug != True)
-        daemon (0, 0);
-
     self->data_conn = XOpenDisplay (NULL);
     self->ctrl_conn = XOpenDisplay (NULL);
 
@@ -147,6 +144,12 @@ int main (int argc, char **argv)
     }
 
     self->map = parse_mapping (self->ctrl_conn, mapping);
+
+    if (self->map == NULL)
+        exit (EXIT_FAILURE);
+
+    if (self->debug != True)
+        daemon (0, 0);
 
     sigemptyset (&self->sigset);
     sigaddset (&self->sigset, SIGINT);
@@ -377,7 +380,7 @@ KeyMap_t* parse_token (Display *dpy, char *token)
 
         if ((ks = XStringToKeysym (from)) == NoSymbol)
         {
-            fprintf (stderr, "Cannot parse %s\n", token);
+            fprintf (stderr, "Invalid key: %s\n", token);
             return NULL;
         }
 
@@ -392,7 +395,7 @@ KeyMap_t* parse_token (Display *dpy, char *token)
 
             if ((ks = XStringToKeysym (key)) == NoSymbol)
             {
-                fprintf (stderr, "Cannot parse %s\n", to);
+                fprintf (stderr, "Invalid key: %s\n", key);
                 return NULL;
             }
 
@@ -429,6 +432,8 @@ KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping)
                 km = nkm;
             }
         }
+        else
+            return NULL;
     }
 
     return rval;
