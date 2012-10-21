@@ -71,7 +71,7 @@ void *sig_handler (void *user_data);
 
 void intercept (XPointer user_data, XRecordInterceptData *data);
 
-void parse_mapping (XCape_t *self, char *mapping);
+KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping);
 
 /************************************************************************
  * Main function
@@ -126,7 +126,7 @@ int main (int argc, char **argv)
         exit (EXIT_FAILURE);
     }
 
-    parse_mapping (self, mapping);
+    self->map = parse_mapping (self->ctrl_conn, mapping);
 
     sigemptyset (&self->sigset);
     sigaddset (&self->sigset, SIGINT);
@@ -279,9 +279,13 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
                 key_event, key_code);
 
         if (key_event == ButtonPress)
+        {
             mouse_pressed = True;
+        }
         else if (key_event == ButtonRelease)
+        {
             mouse_pressed = False;
+        }
         else
         {
             for (km = self->map; km != NULL; km = km->next)
@@ -302,7 +306,7 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
     XRecordFreeData (data);
 }
 
-KeyMap_t* parse_token(Display *dpy, char *token)
+KeyMap_t* parse_token (Display *dpy, char *token)
 {
     KeyMap_t *km = NULL;
     Key_t    *k, *nk;
@@ -336,7 +340,7 @@ KeyMap_t* parse_token(Display *dpy, char *token)
                 return NULL;
             }
 
-            nk = calloc (1, sizeof(Key_t));
+            nk = calloc (1, sizeof (Key_t));
             nk->key = XKeysymToKeycode (dpy, ks);
 
             if (k == NULL)
@@ -350,15 +354,16 @@ KeyMap_t* parse_token(Display *dpy, char *token)
             }
         }
     }
+
     return km;
 }
 
-void parse_mapping (XCape_t *self, char *mapping)
+KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping)
 {
     char     *token;
-    KeyMap_t *km, *nkm;
+    KeyMap_t *rval, *km, *nkm;
 
-    km = self->map = NULL;
+    rval = km = NULL;
 
     for(;;)
     {
@@ -366,12 +371,12 @@ void parse_mapping (XCape_t *self, char *mapping)
         if (token == NULL)
             break;
 
-        nkm = parse_token (self->ctrl_conn, token);
+        nkm = parse_token (ctrl_conn, token);
 
         if (nkm != NULL)
         {
             if (km == NULL)
-                self->map = km = nkm;
+                rval = km = nkm;
             else
             {
                 km->next = nkm;
@@ -379,4 +384,6 @@ void parse_mapping (XCape_t *self, char *mapping)
             }
         }
     }
+
+    return rval;
 }
