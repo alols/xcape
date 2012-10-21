@@ -62,6 +62,8 @@ typedef struct _XCape_t
     Bool debug;
     KeyMap_t *map;
     Key_t *generated;
+    struct timeval timeout;
+    Bool timeout_valid;
 } XCape_t;
 
 /************************************************************************
@@ -82,9 +84,12 @@ int main (int argc, char **argv)
     int dummy, ch;
     static char default_mapping[] = "Control_L=Escape";
     char *mapping = default_mapping;
-
     self->debug = False;
-    while ((ch = getopt (argc, argv, "de:")) != -1)
+    self->timeout.tv_sec = 0;
+    self->timeout.tv_usec = 500000;
+    self->timeout_valid = True;
+
+    while ((ch = getopt (argc, argv, "de:t:")) != -1)
     {
         switch (ch)
         {
@@ -94,8 +99,23 @@ int main (int argc, char **argv)
         case 'e':
             mapping = optarg;
             break;
+        case 't':
+            {
+                int ms = atoi (optarg);
+                if (ms > 0)
+                {
+                    self->timeout_valid = True;
+                    self->timeout.tv_sec = ms / 1000;
+                    self->timeout.tv_usec = (atoi (optarg) % 1000) * 1000;
+                }
+                else
+                {
+                    self->timeout_valid = False;
+                }
+            }
+            break;
         default:
-            fprintf (stdout, "Usage: %s [-d] [-e <mapping>]\n", argv[0]);
+            fprintf (stdout, "Usage: %s [-d] [-t timeout_ms] [-e <mapping>]\n", argv[0]);
             fprintf (stdout,
                     "Runs as a daemon unless -d flag is set\n");
             return EXIT_SUCCESS;
@@ -232,7 +252,9 @@ void handle_key (XCape_t *self, KeyMap_t *key,
         if (self->debug) fprintf (stdout, "Key pressed!\n");
 
         key->pressed = True;
-        gettimeofday (&key->down_at, NULL);
+
+        if (self->timeout_valid)
+            gettimeofday (&key->down_at, NULL);
 
         if (mouse_pressed)
         {
@@ -244,14 +266,14 @@ void handle_key (XCape_t *self, KeyMap_t *key,
         if (self->debug) fprintf (stdout, "Key released!\n");
         if (key->used == False)
         {
-            struct timeval timev, ms650 = {
-                .tv_sec = 0,
-                .tv_usec = 650000
-            };
-            gettimeofday (&timev, NULL);
-            timersub (&timev, &key->down_at, &timev);
+            struct timeval timev = self->timeout;
+            if (self->timeout_valid)
+            {
+                gettimeofday (&timev, NULL);
+                timersub (&timev, &key->down_at, &timev);
+            }
 
-            if (timercmp (&timev, &ms650, <))
+            if (!self->timeout_valid || timercmp (&timev, &self->timeout, <))
             {
                 if (self->debug) fprintf (stdout,
                         "Generating ESC!\n");
