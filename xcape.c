@@ -48,7 +48,6 @@ typedef struct _KeyMap_t
     Bool used;
     Bool pressed;
     Bool mouse;
-    int  fake;
     struct timeval down_at;
     struct _KeyMap_t *next;
 } KeyMap_t;
@@ -62,6 +61,7 @@ typedef struct _XCape_t
     sigset_t sigset;
     Bool debug;
     KeyMap_t *map;
+    Key_t *generated;
 } XCape_t;
 
 /************************************************************************
@@ -201,19 +201,32 @@ void *sig_handler (void *user_data)
     return NULL;
 }
 
+Key_t *key_add_key (Key_t *keys, KeyCode key)
+{
+    Key_t *rval = keys;
+
+    if (keys == NULL)
+    {
+        keys = malloc (sizeof (Key_t));
+        rval = keys;
+    }
+    else
+    {
+        while (keys->next != NULL) keys = keys->next;
+        keys = (keys->next = malloc (sizeof (Key_t)));
+    }
+
+    keys->key = key;
+    keys->next = NULL;
+
+    return rval;
+}
+
 void handle_key (XCape_t *self, KeyMap_t *key,
         Bool mouse_pressed, int key_event)
 {
     Key_t *k;
-    KeyCode kk;
 
-    if (key->fake)
-    {
-        key->fake--;
-        return;
-    }
-
-    kk = XKeysymToKeycode (self->ctrl_conn, key->from);
     if (key_event == KeyPress)
     {
         if (self->debug) fprintf (stdout, "Key pressed!\n");
@@ -247,13 +260,13 @@ void handle_key (XCape_t *self, KeyMap_t *key,
                 {
                     XTestFakeKeyEvent (self->ctrl_conn,
                             k->key, True, 0);
-                    if (kk == k->key)
-                        key->fake += 2;
+                    self->generated = key_add_key (self->generated, k->key);
                 }
                 for (k = key->to_keys; k != NULL; k = k->next)
                 {
                     XTestFakeKeyEvent (self->ctrl_conn,
                             k->key, False, 0);
+                    self->generated = key_add_key (self->generated, k->key);
                 }
                 XFlush (self->ctrl_conn);
             }
@@ -273,6 +286,27 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
     {
         int     key_event = data->data[0];
         KeyCode key_code  = data->data[1];
+        Key_t *g, *g_prev = NULL;
+
+        for (g = self->generated; g != NULL; g = g->next)
+        {
+            if (g->key == key_code)
+            {
+                if (self->debug) fprintf (stdout,
+                        "Ignoring generated event.\n");
+                if (g_prev != NULL)
+                {
+                    g_prev->next = g->next;
+                }
+                else
+                {
+                    self->generated = g->next;
+                }
+                free (g);
+                goto exit;
+            }
+            g_prev = g;
+        }
 
         if (self->debug) fprintf (stdout,
                 "Intercepted key event %d, key code %d\n",
@@ -303,13 +337,13 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
         }
     }
 
+exit:
     XRecordFreeData (data);
 }
 
 KeyMap_t* parse_token (Display *dpy, char *token)
 {
     KeyMap_t *km = NULL;
-    Key_t    *k, *nk;
     KeySym    ks;
     char      *from, *to, *key;
 
@@ -326,7 +360,7 @@ KeyMap_t* parse_token (Display *dpy, char *token)
         }
 
         km->from    = ks;
-        km->to_keys = k = NULL;
+        km->to_keys = NULL;
 
         for(;;)
         {
@@ -340,18 +374,8 @@ KeyMap_t* parse_token (Display *dpy, char *token)
                 return NULL;
             }
 
-            nk = calloc (1, sizeof (Key_t));
-            nk->key = XKeysymToKeycode (dpy, ks);
-
-            if (k == NULL)
-            {
-                km->to_keys = k = nk;
-            }
-            else
-            {
-                k->next = nk;
-                k = nk;
-            }
+            km->to_keys = key_add_key (km->to_keys,
+                    XKeysymToKeycode (dpy, ks));
         }
     }
 
