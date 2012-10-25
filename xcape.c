@@ -90,6 +90,7 @@ int main (int argc, char **argv)
     self->timeout.tv_sec = 0;
     self->timeout.tv_usec = 500000;
     self->timeout_valid = True;
+    self->generated = NULL;
 
     while ((ch = getopt (argc, argv, "de:t:")) != -1)
     {
