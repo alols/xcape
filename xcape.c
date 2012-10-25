@@ -378,7 +378,7 @@ KeyMap_t *parse_token (Display *dpy, char *token)
 
     to = token;
     from = strsep (&to, "=");
-    if (from != NULL)
+    if (to != NULL)
     {
         km = calloc (1, sizeof (KeyMap_t));
 
@@ -407,6 +407,9 @@ KeyMap_t *parse_token (Display *dpy, char *token)
                     XKeysymToKeycode (dpy, ks));
         }
     }
+    else
+        fprintf (stderr, "WARNING: Mapping without = has no effect: '%s'\n", token);
+      
 
     return km;
 }
@@ -436,8 +439,6 @@ KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping)
                 km = nkm;
             }
         }
-        else
-            return NULL;
     }
 
     return rval;
