@@ -46,6 +46,21 @@ This will make Left Shift generate Escape when pressed and released on
 it's own, and Left Control generate Ctrl-O combination when pressed and
 released on it's own.
 
+Note regarding xmodmap
+----------------------
+
+If you are in the habit of remapping keycodes to keysyms (eg, using xmodmap),
+there are two issues you may encounter.
+
+1) You will need to restart xcape after every time you modify the mapping from
+   keycodes to keysyms (eg, with xmodmap), or xcape will still use the old
+   mapping.
+   
+2) The key you wish to send must have a defined keycode. So for example, with
+   the default mapping `Control_L=Escape`, you still need an escape key defined
+   in your xmodmap mapping. (I get around this by using 255, which my keyboard
+   cannot send).
+
 Contact
 -------
 

@@ -375,6 +375,7 @@ KeyMap_t *parse_token (Display *dpy, char *token)
     KeyMap_t *km = NULL;
     KeySym    ks;
     char      *from, *to, *key;
+    KeyCode   code;
 
     to = token;
     from = strsep (&to, "=");
@@ -403,8 +404,15 @@ KeyMap_t *parse_token (Display *dpy, char *token)
                 return NULL;
             }
 
-            km->to_keys = key_add_key (km->to_keys,
-                    XKeysymToKeycode (dpy, ks));
+            code = XKeysymToKeycode (dpy, ks);
+            if (code == 0)
+            {
+                fprintf (stderr, "WARNING: No keycode found for keysym "
+                                 "%s (0x%x) in mapping %s. Ignoring this "
+                                 "mapping.\n", key, (unsigned int)ks, token);
+                return NULL;
+            }
+            km->to_keys = key_add_key (km->to_keys, code);
         }
     }
     else
