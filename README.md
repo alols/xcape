@@ -12,7 +12,7 @@ editor ;)
 Minimal building instructions
 -----------------------------
 
-    $ sudo apt-get install git gcc make libx11-dev libxtst-dev
+    $ sudo apt-get install git gcc make libx11-dev libxtst-dev pkg-config
     $ mkdir xcape
     $ cd xcape
     $ git clone https://github.com/alols/xcape.git .
