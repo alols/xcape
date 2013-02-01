@@ -130,7 +130,7 @@ int main (int argc, char **argv)
 
     if (!self->data_conn || !self->ctrl_conn)
     {
-        fprintf (stderr, "Unable to connect to X11 display. Is $DISPLAY set?\sn");
+        fprintf (stderr, "Unable to connect to X11 display. Is $DISPLAY set?\n");
         exit (EXIT_FAILURE);
     }
     if (!XQueryExtension (self->ctrl_conn,
