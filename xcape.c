@@ -401,7 +401,6 @@ KeyMap_t *parse_token (Display *dpy, char *token)
             // TODO?: Check if code exists
             km->UseKeyCode = True;
             km->from_kc = (KeyCode)code;            // TODO: type
-            km->from_ks = NULL;
         }
         else
         {
@@ -413,7 +412,6 @@ KeyMap_t *parse_token (Display *dpy, char *token)
 
             km->UseKeyCode  = False;
             km->from_ks     = ks;
-            km->from_kc     = NULL;
             km->to_keys     = NULL;
         }
 
