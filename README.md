@@ -38,13 +38,24 @@ The expression has the grammar `'ModKey=Key[|OtherKey][;NextExpression]'`
 The list of key names is found in the header file `X11/keysymdef.h`
 (remove the `XK_` prefix).
 
-#### Example
+If ModKey is specified in decimal, octal (prefix `0`), or hexadecimal (`0x`),
+it will be interpreted as a keycode, unless no corresponding symbol is found.
 
-    xcape -e 'Shift_L=Escape;Control_L=Control_L|O'
+#### Examples
+
+1.    xcape -e 'Shift_L=Escape;Control_L=Control_L|O'
 
 This will make Left Shift generate Escape when pressed and released on
 it's own, and Left Control generate Ctrl-O combination when pressed and
 released on it's own.
+
+2.    xcape-e '42=s;43=l' 
+
+If the `s` key has the code `42` and the `l` key `43` and you have set both
+to `AltGr` with xmodmap, then this will generate the ordinary letters when
+pressed and released on their own. But pressed together with another key, the
+`s` or `l` key will produce `AltGr`. So depending on your keyboard layout, you
+can type e.g. `@` or `{` easily when touch-typing.
 
 Note regarding xmodmap
 ----------------------

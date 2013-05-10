@@ -43,7 +43,7 @@ typedef struct _Key_t
 
 typedef struct _KeyMap_t
 {
-    Bool UseKeyCode;        // instead of KeySym; ignore latter
+    Bool UseKeyCode;        // (for from) instead of KeySym; ignore latter
     KeySym from_ks;
     KeyCode from_kc;
     Key_t *to_keys;
@@ -364,8 +364,7 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
                         && XkbKeycodeToKeysym (self->ctrl_conn, key_code, 0, 0)
                             == km->from_ks)
                     || (km->UseKeyCode == True
-		        && key_code == km->from_kc)
-		    )
+                        && key_code == km->from_kc))
                 {
                     handle_key (self, km, mouse_pressed, key_event);
                 }
@@ -394,16 +393,17 @@ KeyMap_t *parse_token (Display *dpy, char *token)
     {
         km = calloc (1, sizeof (KeyMap_t));
 
-        code = strtoul (from, NULL, 0);
+        code = strtoul (from, NULL, 0); // dec, oct, hex automatically
 
-        if (code >= 8 && code <= 255)    // TODO: check range w/ XDisplayKeycodes instead
+        if (XkbKeycodeToKeysym (dpy, code, 0, 0) != NoSymbol)
         {
-            // TODO?: Check if code exists
             km->UseKeyCode = True;
-            km->from_kc = (KeyCode)code;            // TODO: type
+            km->from_kc = (KeyCode)code;
         }
         else
         {
+            code = 0;
+
             if ((ks = XStringToKeysym (from)) == NoSymbol)
             {
                 fprintf (stderr, "Invalid key: %s\n", token);
