@@ -25,6 +25,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <errno.h>
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <X11/extensions/record.h>
@@ -385,7 +386,8 @@ KeyMap_t *parse_token (Display *dpy, char *token)
     KeyMap_t *km = NULL;
     KeySym    ks;
     char      *from, *to, *key;
-    KeyCode   code;
+    KeyCode   code;        // keycode (to)
+    long      fromcode;    // keycode (from)
 
     to = token;
     from = strsep (&to, "=");
@@ -393,17 +395,26 @@ KeyMap_t *parse_token (Display *dpy, char *token)
     {
         km = calloc (1, sizeof (KeyMap_t));
 
-        code = strtoul (from, NULL, 0); // dec, oct, hex automatically
-
-        if (XkbKeycodeToKeysym (dpy, code, 0, 0) != NoSymbol)
+        if (!strncmp (from, "#", 1)
+               && strsep (&from, "#") != NULL)
         {
-            km->UseKeyCode = True;
-            km->from_kc = (KeyCode)code;
+            errno = 0;
+            fromcode = strtoul (from, NULL, 0); // dec, oct, hex automatically
+            if (errno == 0
+                   && fromcode <=255
+                   && XkbKeycodeToKeysym (dpy, (KeyCode) fromcode, 0, 0) != NoSymbol)
+            {
+                km->UseKeyCode = True;
+                km->from_kc = (KeyCode) fromcode;
+            }
+            else
+            {
+                fprintf (stderr, "Invalid keycode: %s\n", from);
+                return NULL;
+            }
         }
         else
         {
-            code = 0;
-
             if ((ks = XStringToKeysym (from)) == NoSymbol)
             {
                 fprintf (stderr, "Invalid key: %s\n", token);
@@ -431,8 +442,8 @@ KeyMap_t *parse_token (Display *dpy, char *token)
             if (code == 0)
             {
                 fprintf (stderr, "WARNING: No keycode found for keysym "
-                                 "%s (0x%x) in mapping %s. Ignoring this "
-                                 "mapping.\n", key, (unsigned int)ks, token);
+                        "%s (0x%x) in mapping %s. Ignoring this "
+                        "mapping.\n", key, (unsigned int)ks, token);
                 return NULL;
             }
             km->to_keys = key_add_key (km->to_keys, code);
@@ -440,7 +451,7 @@ KeyMap_t *parse_token (Display *dpy, char *token)
     }
     else
         fprintf (stderr, "WARNING: Mapping without = has no effect: '%s'\n", token);
-      
+
 
     return km;
 }
