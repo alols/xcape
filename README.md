@@ -40,7 +40,7 @@ The list of key names is found in the header file `X11/keysymdef.h`
 
 Alternatively, you can specify ModKey in decimal (prefix `#`), octal (`#0`), or
 hexadecimal (`#0x`). It will be interpreted as a keycode unless no corresponding
-symbol is found.
+key name is found.
 
 #### Examples
 
@@ -48,15 +48,15 @@ symbol is found.
 it's own, and Left Control generate Ctrl-O combination when pressed and
 released on it's own.
 
-    xcape -e 'Shift_L=Escape;Control_L=Control_L|O'  
+    xcape -e 'Shift_L=Escape;Control_L=Control_L|O'
 
-2) If the `s` key has the code `42` and the `l` key `43` and you have set both
+2) If your `s` key has the code `42` and your `l` key `43` and you have set both
 to `AltGr` (a.k.a. ISO_Level3_Shift) with xmodmap, then this will generate the
 ordinary letters when pressed and released on their own. But pressed together
-with another key, the `s` or `l` key will produce `AltGr`. So depending on your
-keyboard layout, you can type e.g. `@` or `{` easily when touch-typing.
+with another key, the `s` or `l` key will produce `AltGr`. So, depending on your
+keyboard layout, you can compose e.g. `@`, `{` or `³` easily when touch-typing.
 
-    xcape -e '#42=s;#43=l'   
+    xcape -e '#42=s;#43=l'
 
 Note regarding xmodmap
 ----------------------
