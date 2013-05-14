@@ -25,6 +25,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <errno.h>
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <X11/extensions/record.h>
@@ -43,7 +44,9 @@ typedef struct _Key_t
 
 typedef struct _KeyMap_t
 {
-    KeySym from;
+    Bool UseKeyCode;        // (for from) instead of KeySym; ignore latter
+    KeySym from_ks;
+    KeyCode from_kc;
     Key_t *to_keys;
     Bool used;
     Bool pressed;
@@ -358,8 +361,11 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
         {
             for (km = self->map; km != NULL; km = km->next)
             {
-                if (XkbKeycodeToKeysym (self->ctrl_conn, key_code, 0, 0)
-                        == km->from)
+                if ((km->UseKeyCode == False
+                        && XkbKeycodeToKeysym (self->ctrl_conn, key_code, 0, 0)
+                            == km->from_ks)
+                    || (km->UseKeyCode == True
+                        && key_code == km->from_kc))
                 {
                     handle_key (self, km, mouse_pressed, key_event);
                 }
@@ -380,7 +386,8 @@ KeyMap_t *parse_token (Display *dpy, char *token)
     KeyMap_t *km = NULL;
     KeySym    ks;
     char      *from, *to, *key;
-    KeyCode   code;
+    KeyCode   code;        // keycode (to)
+    long      fromcode;    // keycode (from)
 
     to = token;
     from = strsep (&to, "=");
@@ -388,14 +395,36 @@ KeyMap_t *parse_token (Display *dpy, char *token)
     {
         km = calloc (1, sizeof (KeyMap_t));
 
-        if ((ks = XStringToKeysym (from)) == NoSymbol)
+        if (!strncmp (from, "#", 1)
+               && strsep (&from, "#") != NULL)
         {
-            fprintf (stderr, "Invalid key: %s\n", token);
-            return NULL;
+            errno = 0;
+            fromcode = strtoul (from, NULL, 0); // dec, oct, hex automatically
+            if (errno == 0
+                   && fromcode <=255
+                   && XkbKeycodeToKeysym (dpy, (KeyCode) fromcode, 0, 0) != NoSymbol)
+            {
+                km->UseKeyCode = True;
+                km->from_kc = (KeyCode) fromcode;
+            }
+            else
+            {
+                fprintf (stderr, "Invalid keycode: %s\n", from);
+                return NULL;
+            }
         }
+        else
+        {
+            if ((ks = XStringToKeysym (from)) == NoSymbol)
+            {
+                fprintf (stderr, "Invalid key: %s\n", token);
+                return NULL;
+            }
 
-        km->from    = ks;
-        km->to_keys = NULL;
+            km->UseKeyCode  = False;
+            km->from_ks     = ks;
+            km->to_keys     = NULL;
+        }
 
         for(;;)
         {
@@ -413,8 +442,8 @@ KeyMap_t *parse_token (Display *dpy, char *token)
             if (code == 0)
             {
                 fprintf (stderr, "WARNING: No keycode found for keysym "
-                                 "%s (0x%x) in mapping %s. Ignoring this "
-                                 "mapping.\n", key, (unsigned int)ks, token);
+                        "%s (0x%x) in mapping %s. Ignoring this "
+                        "mapping.\n", key, (unsigned int)ks, token);
                 return NULL;
             }
             km->to_keys = key_add_key (km->to_keys, code);
@@ -422,7 +451,7 @@ KeyMap_t *parse_token (Display *dpy, char *token)
     }
     else
         fprintf (stderr, "WARNING: Mapping without = has no effect: '%s'\n", token);
-      
+
 
     return km;
 }
