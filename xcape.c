@@ -38,7 +38,7 @@
  ***********************************************************************/
 typedef struct _Key_t
 {
-    KeyCode key;
+    KeySym key;
     struct _Key_t *next;
 } Key_t;
 
@@ -78,7 +78,7 @@ void intercept (XPointer user_data, XRecordInterceptData *data);
 
 KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping, Bool debug);
 
-Key_t *key_add_key (Key_t *keys, KeyCode key);
+Key_t *key_add_key (Key_t *keys, KeySym key);
 
 /************************************************************************
  * Main function
@@ -235,7 +235,7 @@ void *sig_handler (void *user_data)
     return NULL;
 }
 
-Key_t *key_add_key (Key_t *keys, KeyCode key)
+Key_t *key_add_key (Key_t *keys, KeySym key)
 {
     Key_t *rval = keys;
 
@@ -289,20 +289,32 @@ void handle_key (XCape_t *self, KeyMap_t *key,
 
             if (!self->timeout_valid || timercmp (&timev, &self->timeout, <))
             {
+                /* Generate key press for each key in keymap */
                 for (k = key->to_keys; k != NULL; k = k->next)
                 {
-                    if (self->debug) fprintf (stdout, "Generating %s!\n",
-                            XKeysymToString (XkbKeycodeToKeysym (self->ctrl_conn,
-                                    k->key, 0, 0)));
+                    if (self->debug)
+                    {
+                      fprintf (stdout, "Generating \"%s\" ( keysym 0x%x, "
+                               "key code %d)\n",
+                               XKeysymToString (k->key),
+                               (unsigned) k->key,
+                               (unsigned) XKeysymToKeycode (self->ctrl_conn, k->key));
+                    }
+
+                    /* This and the XTestFakeKeyEvent call below need to be
+                       replaced with calls to XSendEvent so that the real
+                       KeySym can be used instead of the key code.*/
 
                     XTestFakeKeyEvent (self->ctrl_conn,
-                            k->key, True, 0);
+                            XKeysymToKeycode (self->ctrl_conn, k->key), True, 0);
                     self->generated = key_add_key (self->generated, k->key);
                 }
+
+                /* Generate key release for each key in keymap */
                 for (k = key->to_keys; k != NULL; k = k->next)
                 {
                     XTestFakeKeyEvent (self->ctrl_conn,
-                            k->key, False, 0);
+                            XKeysymToKeycode (self->ctrl_conn, k->key), False, 0);
                     self->generated = key_add_key (self->generated, k->key);
                 }
                 XFlush (self->ctrl_conn);
@@ -327,7 +339,13 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
 
         for (g = self->generated; g != NULL; g = g->next)
         {
-            if (g->key == key_code)
+          /* TODO: This is a bug! By comparing key codes we are ignoring
+             the shift level and group, so non-generated events may be
+             ignored! Unfortunately I don't (yet) understand the
+             XRecordInterceptData data structure well enough to extract the
+             real keysym from the data.
+          */
+          if (XKeysymToKeycode (self->ctrl_conn, g->key) == key_code)
             {
                 if (self->debug) fprintf (stdout,
                         "Ignoring generated event.\n");
@@ -386,7 +404,7 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
     KeyMap_t *km = NULL;
     KeySym    ks;
     char      *from, *to, *key;
-    KeyCode   code;        // keycode (to)
+    KeySym    tosym;       // keysym (to)
     long      fromcode;    // keycode (from)
 
     to = token;
@@ -456,22 +474,23 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
                 return NULL;
             }
 
-            code = XKeysymToKeycode (dpy, ks);
-            if (code == 0)
+
+            tosym = ks;
+            if (XKeysymToKeycode (dpy, ks) == 0)
             {
                 fprintf (stderr, "WARNING: No keycode found for keysym "
                         "%s (0x%x) in mapping %s. Ignoring this "
                         "mapping.\n", key, (unsigned int)ks, token);
                 return NULL;
             }
-            km->to_keys = key_add_key (km->to_keys, code);
+            km->to_keys = key_add_key (km->to_keys, tosym);
 
             if (debug)
             {
               fprintf(stderr, "to \"%s\" (keysym 0x%x, key code %d)\n",
                       key,
                       (unsigned) XStringToKeysym (key),
-                      (unsigned) code);
+                      (unsigned) tosym);
             }
         }
     }
