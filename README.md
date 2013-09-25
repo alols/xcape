@@ -44,19 +44,20 @@ key name is found.
 
 #### Examples
 
-1) This will make Left Shift generate Escape when pressed and released on
-it's own, and Left Control generate Ctrl-O combination when pressed and
-released on it's own.
+1.  This will make Left Shift generate Escape when pressed and released on
+    it's own, and Left Control generate Ctrl-O combination when pressed and
+    released on it's own.
 
-    xcape -e 'Shift_L=Escape;Control_L=Control_L|O'
+        xcape -e 'Shift_L=Escape;Control_L=Control_L|O'
 
-2) If your `s` key has the code `42` and your `l` key `43` and you have set both
-to `AltGr` (a.k.a. ISO_Level3_Shift) with xmodmap, then this will generate the
-ordinary letters when pressed and released on their own. But pressed together
-with another key, the `s` or `l` key will produce `AltGr`. So, depending on your
-keyboard layout, you can compose e.g. `@`, `{` or `³` easily when touch-typing.
+2.  If your `s` key has the code `42` and your `l` key `43` and you have set both
+    to `AltGr` (a.k.a. ISO_Level3_Shift) with xmodmap, then this will generate the
+    ordinary letters when pressed and released on their own. But pressed together
+    with another key, the `s` or `l` key will produce `AltGr`. So, depending on your
+    keyboard layout, you can compose e.g. `@`, `{` or `³` easily when touch-typing.
 
-    xcape -e '#42=s;#43=l'
+        xcape -e '#42=s;#43=l'
+
 
 Note regarding xmodmap
 ----------------------
@@ -64,11 +65,11 @@ Note regarding xmodmap
 If you are in the habit of remapping keycodes to keysyms (eg, using xmodmap),
 there are two issues you may encounter.
 
-1) You will need to restart xcape after every time you modify the mapping from
+1. You will need to restart xcape after every time you modify the mapping from
    keycodes to keysyms (eg, with xmodmap), or xcape will still use the old
    mapping.
-   
-2) The key you wish to send must have a defined keycode. So for example, with
+
+2. The key you wish to send must have a defined keycode. So for example, with
    the default mapping `Control_L=Escape`, you still need an escape key defined
    in your xmodmap mapping. (I get around this by using 255, which my keyboard
    cannot send).
