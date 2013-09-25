@@ -35,10 +35,14 @@ event. Default is 50 ms.
 
 The expression has the grammar `'ModKey=Key[|OtherKey][;NextExpression]'`
 
-The list of key names is found in the header file `X11/keysymdef.h`
-(remove the `XK_` prefix).
+The list of key names is found in the header file `X11/keysymdef.h` (remove
+the `XK_` prefix). Note that due to limitations of X11 shifted keys *must*
+be specified as a shift key followed by the key to be pressed rather than
+the actual name of the character. For example to generate "{" the
+expression `'ModKey=Shift_L|bracketleft'` could be used (assuming that you
+have a key with "{" above "[").
 
-Alternatively, you can specify ModKey in decimal (prefix `#`), octal (`#0`), or
+You can also specify ModKey in decimal (prefix `#`), octal (`#0`), or
 hexadecimal (`#0x`). It will be interpreted as a keycode unless no corresponding
 key name is found.
 
