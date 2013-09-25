@@ -62,6 +62,25 @@ key name is found.
 
         xcape -e '#42=s;#43=l'
 
+3.  We can make the space bar work as an additional ctrl key when held
+    (similar to [Space2ctrl](https://github.com/r0adrunner/Space2Ctrl))
+    with the following sequence of commands.
+
+        # Map a new (currently non-existant) keysym to the spacebar's
+        # keycode and make it a control modifier.
+        xmodmap -e 'keycode 65 = 0x1234'
+        xmodmap -e 'add control = 0x1234'
+
+        # Map space to a new keycode which has no corresponding key (to
+        # keep it around for xcape to use).
+        xmodmap -e 'keycode any = space'
+
+        # Finally use xcape to cause our new keysym to generate a space
+        # when tapped.
+        ./xcape -e '0x1234=space'
+
+    This is particularly useful for emacs users.
+
 
 Note regarding xmodmap
 ----------------------
