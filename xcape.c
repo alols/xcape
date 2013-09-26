@@ -76,7 +76,7 @@ void *sig_handler (void *user_data);
 
 void intercept (XPointer user_data, XRecordInterceptData *data);
 
-KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping);
+KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping, Bool debug);
 
 Key_t *key_add_key (Key_t *keys, KeyCode key);
 
@@ -147,14 +147,14 @@ int main (int argc, char **argv)
         fprintf (stderr, "Failed to obtain xrecord version\n");
         exit (EXIT_FAILURE);
     }
-    if (!XkbQueryExtension (self->ctrl_conn, &dummy, &dummy, 
+    if (!XkbQueryExtension (self->ctrl_conn, &dummy, &dummy,
             &dummy, &dummy, &dummy))
     {
         fprintf (stderr, "Failed to obtain xkb version\n");
         exit (EXIT_FAILURE);
     }
 
-    self->map = parse_mapping (self->ctrl_conn, mapping);
+    self->map = parse_mapping (self->ctrl_conn, mapping, self->debug);
 
     if (self->map == NULL)
         exit (EXIT_FAILURE);
@@ -381,7 +381,7 @@ exit:
     XRecordFreeData (data);
 }
 
-KeyMap_t *parse_token (Display *dpy, char *token)
+KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
 {
     KeyMap_t *km = NULL;
     KeySym    ks;
@@ -406,6 +406,15 @@ KeyMap_t *parse_token (Display *dpy, char *token)
             {
                 km->UseKeyCode = True;
                 km->from_kc = (KeyCode) fromcode;
+                if (debug)
+                {
+                  KeySym ks_temp = XkbKeycodeToKeysym (dpy, (KeyCode) fromcode, 0, 0);
+                  fprintf(stderr, "Assigned mapping from from \"%s\" ( keysym 0x%x, "
+                          "key code %d)\n",
+                          XKeysymToString(ks_temp),
+                          (unsigned) ks_temp,
+                          (unsigned) km->from_kc);
+                }
             }
             else
             {
@@ -424,6 +433,15 @@ KeyMap_t *parse_token (Display *dpy, char *token)
             km->UseKeyCode  = False;
             km->from_ks     = ks;
             km->to_keys     = NULL;
+
+            if (debug)
+            {
+              fprintf(stderr, "Assigned mapping from \"%s\" ( keysym 0x%x, "
+                      "key code %d)\n",
+                      XKeysymToString (km->from_ks),
+                      (unsigned) km->from_ks,
+                      (unsigned) XKeysymToKeycode (dpy, km->from_ks));
+            }
         }
 
         for(;;)
@@ -447,6 +465,14 @@ KeyMap_t *parse_token (Display *dpy, char *token)
                 return NULL;
             }
             km->to_keys = key_add_key (km->to_keys, code);
+
+            if (debug)
+            {
+              fprintf(stderr, "to \"%s\" (keysym 0x%x, key code %d)\n",
+                      key,
+                      (unsigned) XStringToKeysym (key),
+                      (unsigned) code);
+            }
         }
     }
     else
@@ -456,7 +482,7 @@ KeyMap_t *parse_token (Display *dpy, char *token)
     return km;
 }
 
-KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping)
+KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping, Bool debug)
 {
     char     *token;
     KeyMap_t *rval, *km, *nkm;
@@ -469,7 +495,7 @@ KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping)
         if (token == NULL)
             break;
 
-        nkm = parse_token (ctrl_conn, token);
+        nkm = parse_token (ctrl_conn, token, debug);
 
         if (nkm != NULL)
         {
