@@ -29,7 +29,7 @@ Debug mode. Does not fork into the background.
 ### `-t <timeout ms>`
 
 If you hold a key longer than this timeout, xcape will not generate a key
-event. Default is 50 ms.
+event. Default is 500 ms.
 
 ### `-e <map-expression>`
 
