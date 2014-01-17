@@ -79,7 +79,7 @@ key name is found.
         xmodmap -e "keycode any = space"
 
         # Finally use xcape to cause the space bar to generate a space when tapped.
-        xcape -e 'Hyper_L=space'
+        xcape -e "$spare_modifier=space"
 
     This is particularly useful for emacs users.
 
