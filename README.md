@@ -48,23 +48,23 @@ key name is found.
 
 #### Examples
 
-1.  This will make Left Shift generate Escape when pressed and released on
++   This will make Left Shift generate Escape when pressed and released on
     it's own, and Left Control generate Ctrl-O combination when pressed and
     released on it's own.
 
         xcape -e 'Shift_L=Escape;Control_L=Control_L|O'
 
-2.  If your `s` key has the code `42` and your `l` key `43` and you have set both
-    to `AltGr` (a.k.a. ISO_Level3_Shift) with xmodmap, then this will generate the
-    ordinary letters when pressed and released on their own. But pressed together
-    with another key, the `s` or `l` key will produce `AltGr`. So, depending on your
-    keyboard layout, you can compose e.g. `@`, `{` or `³` easily when touch-typing.
-
-        xcape -e '#42=s;#43=l'
-
-3.  We can make the space bar work as an additional ctrl key when held
-    (similar to [Space2ctrl](https://github.com/r0adrunner/Space2Ctrl))
-    with the following sequence of commands.
++   In conjugation with xmodmap it is possible to make an ordinary key act
+    as an extra modifier. First map the key to the modifier with xmodmap
+    and then the modifier back to the key with xcape. However, this has
+    several limitations: the key will not work as ordinary until it is
+    relased, and in particular, *it may act as a modifier unintentionally if
+    you type to fast.* This is not a bug in xcape, but an unavoidable
+    consequence of using these two tools together in this way.
+    As an example, we can make the space bar work as an additional ctrl
+    key when held (similar to
+    [Space2ctrl](https://github.com/r0adrunner/Space2Ctrl)) with the
+    following sequence of commands.
 
         # Map an unused modifier's keysym to the spacebar's keycode and make it a
         # control modifier. It needs to be an existing key so that emacs won't
@@ -80,8 +80,6 @@ key name is found.
 
         # Finally use xcape to cause the space bar to generate a space when tapped.
         xcape -e "$spare_modifier=space"
-
-    This is particularly useful for emacs users.
 
 
 Note regarding xmodmap
