@@ -1,0 +1,92 @@
+.TH XCAPE 1 2014-02-13 "John Hill" "xcape Manual"
+
+.SH NAME
+xcape \- use a modifier key as another key
+
+.SH SYNOPSIS
+.B xcape
+[\fB-d\fR]
+[\fB-t\fR \fItimeout\fR]
+[\fB-e\fR \fImap-expression\fR]
+
+.SH DESCRIPTION
+\fBxcape\fR allows a modifier key to be used as another key when it is pressed
+and released on its own. The default behaviour is to generate the \fIEscape\fR
+key in place of \fIControl_L\fR (Left Control).
+
+.SH OPTIONS
+.TP
+.BR \-d
+Debug mode.  Will run as a foreground process.
+.TP
+.BR \-t " " \fItimeout\fR
+Give a \fItimeout\fR in milliseconds.  If you hold a key longer than
+\fItimeout\fR a key event will not be generated.
+.TP
+.BR \-e " " \fImap-expression\fR
+Use \fImap-expression\fR as the expression(s).
+
+.SH EXPRESSION SYNTAX
+Expression syntax is \'\fBModKey\fR=\fBKey\fR[|\fBOtherKey\fR]\'.  Multiple
+expressions can be passed, delimited by semi-colons (;). 
+.PP
+A list of keysyms can be found in the header file <\fIX11/keysymdef.h\fR>
+(without the \fIXK_\fR prefix).
+.PP
+Note that shifted keys must be specified as a shift key followed by the key to
+be pressed rather than the actual name of the character. For example to
+generate "\fI{\fR" the expression
+\'\fIModKey\fR=\fIShift_L\fR|\fIbracketleft\fR\' could be used
+(assuming that you have a key with \'{\' above \'[\').
+.PP
+You can also specify \fBModKey\fR in decimal (prefix \fI#\fR), octal
+(\fI#0\fR), or hexadecimal (\fI#0x\fR). It will be interpreted as a keycode
+unless no corresponding key name is
+found.
+
+.SH EXAMPLES
+.PP
+Make Left Shift generate Escape when pressed and released on it's own, and Left
+Control generate Ctrl\-O combination when pressed and released on it's own:
+.RS
+\fBxcape\fR \fB-e\fR '\fIShift_L\fR=\fIEscape\fR;\fIControl_L\fR=\fIControl_L\fR|\fIO\fR'
+.RE
+.PP
+In conjugation with xmodmap it is possible to make an ordinary key act as an
+extra modifier. First map the key to the modifier with xmodmap and then the
+modifier back to the key with \fBxcape\fR. As an example, we can make the space
+bar work as an additional ctrl key when held with the following sequence of
+commands:
+.PP
+First, map an unused modifier's keysym to the spacebar's keycode and make it a
+control modifier. It needs to be an existing key so that emacs won't spazz out
+when you press it. Hyper_L is a good candidate.
+.PP
+.RS
+.nf
+\fBspare_modifier\fR="\fIHyper_L\fR"
+\fBxmoadmap\fR \fB-e\fR "\fBkeycode\fR \fI65\fR = \fI$spare_modifier\fR"
+\fBxmoadmap\fR \fB-e\fR "\fBremove\fR \fImod4\fR = \fI$spare_modifier\fR"
+# hyper_l is mod4 by default
+\fBxmoadmap\fR \fB-e\fR "\fBadd\fR \fIControl\fR = \fI$spare_modifier\fR"
+.fi
+.RE
+.PP
+Next, map space to an unused keycode (to keep it around for \fBxcape\fR to use).
+.PP
+.RS
+\fBxmodmap\fR \fR-e\fR "\fBkeycode\fR \fIany\fR = \fIspace\fR"
+.RE
+.PP
+Finally use \fBxcape\fR to cause the space bar to generate a space when tapped.
+.PP
+.RS
+\fBxcape\fR \fB-e\fR "\fI$spare_modifier\fR=\fIspace\fR"
+.RE
+
+.SH SEE ALSO
+\fBxmodmap\fR(1), \fBxev\fR(1)
+
+.SH AUTHOR
+\fBxcape\fR was written by Albin Olsson
+(albin dot olsson at gmail dot com)

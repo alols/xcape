@@ -1,5 +1,6 @@
 INSTALL=install
 PREFIX=/usr
+MANDIR?=/local/man/man1
 
 TARGET := xcape
 
@@ -13,6 +14,7 @@ $(TARGET): xcape.c
 
 install:
 	$(INSTALL) -Dm 755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/$(TARGET)
+	$(INSTALL) -Dm 644 xcape.1 $(DESTDIR)$(PREFIX)$(MANDIR)/xcape.1
 
 clean:
 	rm $(TARGET)
