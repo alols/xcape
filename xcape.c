@@ -261,7 +261,7 @@ void handle_key (XCape_t *self, KeyMap_t *key,
 {
     Key_t *k;
 
-    if (key_event == KeyPress)
+    if (key_event == KeyPress && !key->pressed)
     {
         if (self->debug) fprintf (stdout, "Key pressed!\n");
 
@@ -275,7 +275,7 @@ void handle_key (XCape_t *self, KeyMap_t *key,
             key->used = True;
         }
     }
-    else
+    else if (key_event == KeyRelease)
     {
         if (self->debug) fprintf (stdout, "Key released!\n");
         if (key->used == False)
