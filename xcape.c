@@ -78,7 +78,11 @@ void intercept (XPointer user_data, XRecordInterceptData *data);
 
 KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping, Bool debug);
 
+void delete_mapping (KeyMap_t *map);
+
 Key_t *key_add_key (Key_t *keys, KeyCode key);
+
+void delete_keys (Key_t *keys);
 
 /************************************************************************
  * Main function
@@ -197,15 +201,23 @@ int main (int argc, char **argv)
         exit (EXIT_FAILURE);
     }
 
+    pthread_join (self->sigwait_thread, NULL);
+
     if (!XRecordFreeContext (self->ctrl_conn, self->record_ctx))
     {
         fprintf (stderr, "Failed to free xrecord context\n");
     }
 
+    if (self->debug) fprintf (stdout, "main exiting\n");
+
+    XFree (rec_range);
+
     XCloseDisplay (self->ctrl_conn);
     XCloseDisplay (self->data_conn);
 
-    if (self->debug) fprintf (stdout, "main exiting\n");
+    delete_mapping (self->map);
+
+    free (self);
 
     return EXIT_SUCCESS;
 }
@@ -514,4 +526,23 @@ KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping, Bool debug)
     }
 
     return rval;
+}
+
+void delete_mapping (KeyMap_t *map)
+{
+    while (map != NULL) {
+        KeyMap_t *next = map->next;
+        delete_keys (map->to_keys);
+        free (map);
+        map = next;
+    }
+}
+
+void delete_keys (Key_t *keys)
+{
+    while (keys != NULL) {
+        Key_t *next = keys->next;
+        free (keys);
+        keys = next;
+    }
 }
