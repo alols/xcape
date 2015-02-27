@@ -44,7 +44,7 @@ typedef struct _Key_t
 
 typedef struct _KeyMap_t
 {
-    Bool UseKeyCode;        // (for from) instead of KeySym; ignore latter
+    Bool UseKeyCode;        /* (for from) instead of KeySym; ignore latter */
     KeySym from_ks;
     KeyCode from_kc;
     Key_t *to_keys;
@@ -86,14 +86,23 @@ Key_t *key_add_key (Key_t *keys, KeyCode key);
 int main (int argc, char **argv)
 {
     XCape_t *self = malloc (sizeof (XCape_t));
+
     int dummy, ch;
+
     static char default_mapping[] = "Control_L=Escape";
     char *mapping = default_mapping;
+
+    XRecordRange *rec_range = XRecordAllocRange();
+    XRecordClientSpec client_spec = XRecordAllClients;
+
     self->debug = False;
     self->timeout.tv_sec = 0;
     self->timeout.tv_usec = 500000;
     self->timeout_valid = True;
     self->generated = NULL;
+
+    rec_range->device_events.first = KeyPress;
+    rec_range->device_events.last = ButtonRelease;
 
     while ((ch = getopt (argc, argv, "de:t:")) != -1)
     {
@@ -169,11 +178,6 @@ int main (int argc, char **argv)
 
     pthread_create (&self->sigwait_thread,
             NULL, sig_handler, self);
-
-    XRecordRange *rec_range = XRecordAllocRange();
-    rec_range->device_events.first = KeyPress;
-    rec_range->device_events.last = ButtonRelease;
-    XRecordClientSpec client_spec = XRecordAllClients;
 
     self->record_ctx = XRecordCreateContext (self->ctrl_conn,
             0, &client_spec, 1, &rec_range, 1);
@@ -386,8 +390,8 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
     KeyMap_t *km = NULL;
     KeySym    ks;
     char      *from, *to, *key;
-    KeyCode   code;        // keycode (to)
-    long      fromcode;    // keycode (from)
+    KeyCode   code;        /* keycode (to)   */
+    long      fromcode;    /* keycode (from) */
 
     to = token;
     from = strsep (&to, "=");
@@ -399,7 +403,7 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
                && strsep (&from, "#") != NULL)
         {
             errno = 0;
-            fromcode = strtoul (from, NULL, 0); // dec, oct, hex automatically
+            fromcode = strtoul (from, NULL, 0); /* dec, oct, hex automatically */
             if (errno == 0
                    && fromcode <=255
                    && XkbKeycodeToKeysym (dpy, (KeyCode) fromcode, 0, 0) != NoSymbol)
