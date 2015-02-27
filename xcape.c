@@ -1,7 +1,7 @@
 /************************************************************************
  * xcape.c
  *
- * Copyright 2012 Albin Olsson
+ * Copyright 2015 Albin Olsson
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
