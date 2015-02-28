@@ -141,6 +141,12 @@ int main (int argc, char **argv)
         }
     }
 
+    if (!XInitThreads ())
+    {
+        fprintf (stderr, "Failed to initialize threads.\n");
+        exit (EXIT_FAILURE);
+    }
+
     self->data_conn = XOpenDisplay (NULL);
     self->ctrl_conn = XOpenDisplay (NULL);
 
@@ -237,6 +243,8 @@ void *sig_handler (void *user_data)
 
     if (self->debug) fprintf (stdout, "Caught signal %d!\n", sig);
 
+    XLockDisplay (self->ctrl_conn);
+
     if (!XRecordDisableContext (self->ctrl_conn,
                 self->record_ctx))
     {
@@ -245,6 +253,8 @@ void *sig_handler (void *user_data)
     }
 
     XSync (self->ctrl_conn, False);
+
+    XUnlockDisplay (self->ctrl_conn);
 
     if (self->debug) fprintf (stdout, "sig_handler exiting...\n");
 
@@ -335,6 +345,8 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
     static Bool mouse_pressed = False;
     KeyMap_t *km;
 
+    XLockDisplay (self->ctrl_conn);
+
     if (data->category == XRecordFromServer)
     {
         int     key_event = data->data[0];
@@ -394,6 +406,7 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
     }
 
 exit:
+    XUnlockDisplay (self->ctrl_conn); 
     XRecordFreeData (data);
 }
 
