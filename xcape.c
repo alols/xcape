@@ -26,6 +26,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <errno.h>
+#include <time.h>
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <X11/extensions/record.h>
@@ -51,8 +52,8 @@ typedef struct _KeyMap_t
     Bool used;
     Bool pressed;
     Bool mouse;
-    struct timeval down_at;
     struct _KeyMap_t *next;
+    pthread_t timeout_thread;
 } KeyMap_t;
 
 typedef struct _XCape_t
@@ -65,14 +66,17 @@ typedef struct _XCape_t
     Bool debug;
     KeyMap_t *map;
     Key_t *generated;
-    struct timeval timeout;
+    struct timespec timeout;
     Bool timeout_valid;
+    pthread_t ignore_thread;
 } XCape_t;
 
 /************************************************************************
  * Internal function declarations
  ***********************************************************************/
 void *sig_handler (void *user_data);
+
+void *timeout_handler (void *user_data);
 
 void intercept (XPointer user_data, XRecordInterceptData *data);
 
@@ -101,9 +105,10 @@ int main (int argc, char **argv)
 
     self->debug = False;
     self->timeout.tv_sec = 0;
-    self->timeout.tv_usec = 500000;
+    self->timeout.tv_nsec = 500000000;
     self->timeout_valid = True;
     self->generated = NULL;
+    self->ignore_thread = pthread_self ();
 
     rec_range->device_events.first = KeyPress;
     rec_range->device_events.last = ButtonRelease;
@@ -125,7 +130,7 @@ int main (int argc, char **argv)
                 {
                     self->timeout_valid = True;
                     self->timeout.tv_sec = ms / 1000;
-                    self->timeout.tv_usec = (ms % 1000) * 1000;
+                    self->timeout.tv_nsec = (ms % 1000000) * 1000000;
                 }
                 else
                 {
@@ -261,6 +266,35 @@ void *sig_handler (void *user_data)
     return NULL;
 }
 
+void *timeout_handler (void *user_data)
+{
+    XCape_t *self = (XCape_t*)user_data;
+    KeyMap_t *key = self->map;
+
+    pthread_detach (pthread_self ());
+
+    if (nanosleep (&self->timeout, NULL))
+    {
+        fprintf (stderr, "Error sleeping in timeout thread\n");
+        return NULL;
+    }
+
+    XLockDisplay (self->ctrl_conn);
+
+    while (!pthread_equal (key->timeout_thread, pthread_self ()))
+    {
+        key = key->next;
+        if (key == NULL)
+            goto exit; /* The thread has been invalidated or superseded */
+    }
+
+    key->used = True;
+
+exit:
+    XUnlockDisplay (self->ctrl_conn);
+    return NULL;
+}
+
 Key_t *key_add_key (Key_t *keys, KeyCode key)
 {
     Key_t *rval = keys;
@@ -293,46 +327,38 @@ void handle_key (XCape_t *self, KeyMap_t *key,
 
         key->pressed = True;
 
-        if (self->timeout_valid)
-            gettimeofday (&key->down_at, NULL);
-
         if (mouse_pressed)
         {
             key->used = True;
         }
+
+        pthread_create (&key->timeout_thread, NULL, timeout_handler, self);
     }
     else
     {
         if (self->debug) fprintf (stdout, "Key released!\n");
+
+        key->timeout_thread = self->ignore_thread;
+
         if (key->used == False)
         {
-            struct timeval timev = self->timeout;
-            if (self->timeout_valid)
+            for (k = key->to_keys; k != NULL; k = k->next)
             {
-                gettimeofday (&timev, NULL);
-                timersub (&timev, &key->down_at, &timev);
-            }
+                if (self->debug) fprintf (stdout, "Generating %s!\n",
+                        XKeysymToString (XkbKeycodeToKeysym (self->ctrl_conn,
+                                k->key, 0, 0)));
 
-            if (!self->timeout_valid || timercmp (&timev, &self->timeout, <))
+                XTestFakeKeyEvent (self->ctrl_conn,
+                        k->key, True, 0);
+                self->generated = key_add_key (self->generated, k->key);
+            }
+            for (k = key->to_keys; k != NULL; k = k->next)
             {
-                for (k = key->to_keys; k != NULL; k = k->next)
-                {
-                    if (self->debug) fprintf (stdout, "Generating %s!\n",
-                            XKeysymToString (XkbKeycodeToKeysym (self->ctrl_conn,
-                                    k->key, 0, 0)));
-
-                    XTestFakeKeyEvent (self->ctrl_conn,
-                            k->key, True, 0);
-                    self->generated = key_add_key (self->generated, k->key);
-                }
-                for (k = key->to_keys; k != NULL; k = k->next)
-                {
-                    XTestFakeKeyEvent (self->ctrl_conn,
-                            k->key, False, 0);
-                    self->generated = key_add_key (self->generated, k->key);
-                }
-                XFlush (self->ctrl_conn);
+                XTestFakeKeyEvent (self->ctrl_conn,
+                        k->key, False, 0);
+                self->generated = key_add_key (self->generated, k->key);
             }
+            XFlush (self->ctrl_conn);
         }
         key->used = False;
         key->pressed = False;
