@@ -84,6 +84,8 @@ Key_t *key_add_key (Key_t *keys, KeyCode key);
 
 void delete_keys (Key_t *keys);
 
+void print_usage (const char *program_name);
+
 /************************************************************************
  * Main function
  ***********************************************************************/
@@ -134,11 +136,16 @@ int main (int argc, char **argv)
             }
             break;
         default:
-            fprintf (stdout, "Usage: %s [-d] [-t timeout_ms] [-e <mapping>]\n", argv[0]);
-            fprintf (stdout,
-                    "Runs as a daemon unless -d flag is set\n");
+            print_usage (argv[0]);
             return EXIT_SUCCESS;
         }
+    }
+
+    if (optind < argc)
+    {
+        fprintf (stderr, "Not a command line option: '%s'\n", argv[optind]);
+        print_usage (argv[0]);
+        return EXIT_SUCCESS;
     }
 
     if (!XInitThreads ())
@@ -176,7 +183,10 @@ int main (int argc, char **argv)
     self->map = parse_mapping (self->ctrl_conn, mapping, self->debug);
 
     if (self->map == NULL)
+    {
+        fprintf (stderr, "Failed to parse_mapping\n");
         exit (EXIT_FAILURE);
+    }
 
     if (self->debug != True)
         daemon (0, 0);
@@ -558,4 +568,10 @@ void delete_keys (Key_t *keys)
         free (keys);
         keys = next;
     }
+}
+
+void print_usage (const char *program_name)
+{
+    fprintf (stdout, "Usage: %s [-d] [-t timeout_ms] [-e <mapping>]\n", program_name);
+    fprintf (stdout, "Runs as a daemon unless -d flag is set\n");
 }
