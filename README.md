@@ -12,11 +12,12 @@ editor ;)
 Minimal building instructions
 -----------------------------
 
-    $ sudo apt-get install git gcc make pkg-config libx11-dev libxtst-dev libxi-dev
-    $ mkdir xcape
-    $ cd xcape
-    $ git clone https://github.com/alols/xcape.git .
-    $ make
+    $ sudo apt-get install git gcc pkg-config libx11-dev libxtst-dev libxi-dev meson
+    $ git clone https://github.com/alols/xcape.git xcape
+    $ cd xcape/
+    $ mkdir build/
+    $ meson build/
+    $ ninja-build build/
 
 Usage
 -----
