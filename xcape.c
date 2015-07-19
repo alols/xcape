@@ -395,22 +395,20 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
         {
             mouse_pressed = False;
         }
-        else
+        for (km = self->map; km != NULL; km = km->next)
         {
-            for (km = self->map; km != NULL; km = km->next)
+            if ((km->UseKeyCode == False
+                    && XkbKeycodeToKeysym (self->ctrl_conn, key_code, 0, 0)
+                        == km->from_ks)
+                || (km->UseKeyCode == True
+                    && key_code == km->from_kc))
             {
-                if ((km->UseKeyCode == False
-                        && XkbKeycodeToKeysym (self->ctrl_conn, key_code, 0, 0)
-                            == km->from_ks)
-                    || (km->UseKeyCode == True
-                        && key_code == km->from_kc))
-                {
-                    handle_key (self, km, mouse_pressed, key_event);
-                }
-                else if (km->pressed && key_event == KeyPress)
-                {
-                    km->used = True;
-                }
+                handle_key (self, km, mouse_pressed, key_event);
+            }
+            else if (km->pressed
+                    && (key_event == KeyPress || key_event == ButtonPress))
+            {
+                km->used = True;
             }
         }
     }
