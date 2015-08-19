@@ -17,6 +17,7 @@ Minimal building instructions
     $ cd xcape
     $ git clone https://github.com/alols/xcape.git .
     $ make
+    $ sudo make install
 
 Usage
 -----
