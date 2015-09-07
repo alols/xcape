@@ -13,9 +13,8 @@ Minimal building instructions
 -----------------------------
 
     $ sudo apt-get install git gcc make pkg-config libx11-dev libxtst-dev libxi-dev
-    $ mkdir xcape
+    $ git clone https://github.com/alols/xcape.git
     $ cd xcape
-    $ git clone https://github.com/alols/xcape.git .
     $ make
     $ sudo make install
 
