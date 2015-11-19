@@ -14,7 +14,7 @@ all: $(TARGET)
 $(TARGET): xcape.c
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 
-install:
+install: $(TARGET)
 	$(INSTALL) -d -m 0755 $(DESTDIR)$(PREFIX)/bin
 	$(INSTALL) -d -m 0755 $(DESTDIR)$(PREFIX)$(MANDIR)
 	$(INSTALL) -m 0755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/$(TARGET)
