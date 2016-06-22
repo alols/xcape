@@ -32,6 +32,7 @@
 #include <X11/extensions/XTest.h>
 #include <X11/XKBlib.h>
 
+#define BIT(c, x) ( c[x/8]&(1<<(x%8)) )
 
 /************************************************************************
  * Internal data types
@@ -47,6 +48,8 @@ typedef struct _KeyMap_t
     Bool UseKeyCode;        /* (for from) instead of KeySym; ignore latter */
     KeySym from_ks;
     KeyCode from_kc;
+    Bool UseModifier;
+    KeySym modifier;
     Key_t *to_keys;
     Bool used;
     Bool pressed;
@@ -320,6 +323,16 @@ void handle_key (XCape_t *self, KeyMap_t *key,
 
             if (timercmp (&timev, &self->timeout, <))
             {
+                char buf[32], *keys = buf;
+                XQueryKeymap(self->ctrl_conn, keys);
+                if (key->UseModifier) {
+                    if (!BIT(keys, XKeysymToKeycode (self->ctrl_conn, key->modifier))) {
+                        goto skip;
+                    }
+                } else {
+                    for (int i = 0; i < 32; i++)
+                      if (keys[i]) goto skip;
+                }
                 for (k = key->to_keys; k != NULL; k = k->next)
                 {
                     if (self->debug) fprintf (stdout, "Generating %s!\n",
@@ -339,6 +352,7 @@ void handle_key (XCape_t *self, KeyMap_t *key,
                 XFlush (self->ctrl_conn);
             }
         }
+    skip:
         key->used = False;
         key->pressed = False;
     }
@@ -409,7 +423,7 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
     }
 
 exit:
-    XUnlockDisplay (self->ctrl_conn); 
+    XUnlockDisplay (self->ctrl_conn);
     XRecordFreeData (data);
 }
 
@@ -417,11 +431,17 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
 {
     KeyMap_t *km = NULL;
     KeySym    ks;
-    char      *from, *to, *key;
+    char      *modifier, *from, *to, *key;
     KeyCode   code;        /* keycode (to)   */
     long      fromcode;    /* keycode (from) */
 
     to = token;
+    modifier = strsep (&to, ":");
+    if (to == NULL) {
+        to = token;
+        modifier = NULL;
+    }
+
     from = strsep (&to, "=");
     if (to != NULL)
     {
@@ -474,6 +494,28 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
                       (unsigned) km->from_ks,
                       (unsigned) XKeysymToKeycode (dpy, km->from_ks));
             }
+        }
+
+        if (modifier != NULL) {
+            if ((ks = XStringToKeysym (modifier)) == NoSymbol)
+            {
+                fprintf (stderr, "Invalid key: %s\n", token);
+                return NULL;
+            }
+
+            km->UseModifier = True;
+            km->modifier    = ks;
+
+            if (debug)
+            {
+                fprintf(stderr, "Assigned mapping with modifier \"%s\" ( keysym 0x%x, "
+                        "key code %d)\n",
+                        XKeysymToString (km->modifier),
+                        (unsigned) km->modifier,
+                        (unsigned) XKeysymToKeycode (dpy, km->modifier));
+            }
+        } else {
+            km->UseModifier = False;
         }
 
         for(;;)
