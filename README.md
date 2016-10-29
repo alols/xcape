@@ -49,8 +49,8 @@ key name is found.
 #### Examples
 
 +   This will make Left Shift generate Escape when pressed and released on
-    it's own, and Left Control generate Ctrl-O combination when pressed and
-    released on it's own.
+    its own, and Left Control generate Ctrl-O combination when pressed and
+    released on its own.
 
         xcape -e 'Shift_L=Escape;Control_L=Control_L|O'
 
