@@ -12,7 +12,17 @@ editor ;)
 Minimal building instructions
 -----------------------------
 
+First install the development dependencies. On Debian-based systems
+(including Ubuntu and Linux Mint), run:
+
     $ sudo apt-get install git gcc make pkg-config libx11-dev libxtst-dev libxi-dev
+
+On Fedora-based systems, run:
+
+    $ sudo dnf install git gcc make pkgconfig libX11-devel libXtst-devel libXi-devel
+
+Then run:
+
     $ git clone https://github.com/alols/xcape.git
     $ cd xcape
     $ make
