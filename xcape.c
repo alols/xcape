@@ -131,7 +131,9 @@ int main (int argc, char **argv)
                 }
                 else
                 {
-                    self->timeout_valid = False;
+                    fprintf (stderr, "Invalid argument for '-t': %s.\n", optarg);
+                    print_usage (argv[0]);
+                    return EXIT_FAILURE;
                 }
             }
             break;
