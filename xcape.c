@@ -66,7 +66,6 @@ typedef struct _XCape_t
     KeyMap_t *map;
     Key_t *generated;
     struct timeval timeout;
-    Bool timeout_valid;
 } XCape_t;
 
 /************************************************************************
@@ -104,7 +103,6 @@ int main (int argc, char **argv)
     self->debug = False;
     self->timeout.tv_sec = 0;
     self->timeout.tv_usec = 500000;
-    self->timeout_valid = True;
     self->generated = NULL;
 
     rec_range->device_events.first = KeyPress;
@@ -125,13 +123,14 @@ int main (int argc, char **argv)
                 int ms = atoi (optarg);
                 if (ms > 0)
                 {
-                    self->timeout_valid = True;
                     self->timeout.tv_sec = ms / 1000;
                     self->timeout.tv_usec = (ms % 1000) * 1000;
                 }
                 else
                 {
-                    self->timeout_valid = False;
+                    fprintf (stderr, "Invalid argument for '-t': %s.\n", optarg);
+                    print_usage (argv[0]);
+                    return EXIT_FAILURE;
                 }
             }
             break;
@@ -303,8 +302,7 @@ void handle_key (XCape_t *self, KeyMap_t *key,
 
         key->pressed = True;
 
-        if (self->timeout_valid)
-            gettimeofday (&key->down_at, NULL);
+        gettimeofday (&key->down_at, NULL);
 
         if (mouse_pressed)
         {
@@ -317,13 +315,10 @@ void handle_key (XCape_t *self, KeyMap_t *key,
         if (key->used == False)
         {
             struct timeval timev = self->timeout;
-            if (self->timeout_valid)
-            {
-                gettimeofday (&timev, NULL);
-                timersub (&timev, &key->down_at, &timev);
-            }
+            gettimeofday (&timev, NULL);
+            timersub (&timev, &key->down_at, &timev);
 
-            if (!self->timeout_valid || timercmp (&timev, &self->timeout, <))
+            if (timercmp (&timev, &self->timeout, <))
             {
                 for (k = key->to_keys; k != NULL; k = k->next)
                 {
