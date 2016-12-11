@@ -52,8 +52,8 @@ the actual name of the character. For example to generate "{" the
 expression `'ModKey=Shift_L|bracketleft'` could be used (assuming that you
 have a key with "{" above "[").
 
-You can also specify ModKey in decimal (prefix `#`), octal (`#0`), or
-hexadecimal (`#0x`). It will be interpreted as a keycode unless no corresponding
+You can also specify keys in decimal (prefix `#`), octal (`#0`), or
+hexadecimal (`#0x`). They will be interpreted as keycodes unless no corresponding
 key name is found.
 
 #### Examples
