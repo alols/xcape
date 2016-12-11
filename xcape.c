@@ -440,8 +440,8 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
                 km->from_kc = (KeyCode) fromcode;
                 if (debug)
                 {
-                  KeySym ks_temp = XkbKeycodeToKeysym (dpy, (KeyCode) fromcode, 0, 0);
-                  fprintf(stderr, "Assigned mapping from from \"%s\" ( keysym 0x%x, "
+                  KeySym ks_temp = XkbKeycodeToKeysym (dpy, (KeyCode) parsed_code, 0, 0);
+                  fprintf(stderr, "Assigned mapping from \"%s\" ( keysym 0x%x, "
                           "key code %d)\n",
                           XKeysymToString(ks_temp),
                           (unsigned) ks_temp,
