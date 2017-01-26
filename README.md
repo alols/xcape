@@ -23,7 +23,7 @@ On Fedora-based systems, run:
 
 Then run:
 
-    $ git clone https://github.com/alols/xcape.git
+    $ git clone https://github.com/burt777/xcape.git
     $ cd xcape
     $ make
     $ sudo make install
