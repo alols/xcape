@@ -30,11 +30,15 @@ Then run:
 
 Usage
 -----
-    $ xcape [-d] [-t <timeout ms>] [-e <map-expression>]
+    $ xcape [-d] [-s] [-t <timeout ms>] [-e <map-expression>]
 
 ### `-d`
 
 Debug mode. Does not fork into the background.
+
+### `-s`
+
+Disable behaviour when Shift is held down.
 
 ### `-t <timeout ms>`
 

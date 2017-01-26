@@ -63,6 +63,7 @@ typedef struct _XCape_t
     pthread_t sigwait_thread;
     sigset_t sigset;
     Bool debug;
+    Bool disable_with_shift;
     KeyMap_t *map;
     Key_t *generated;
     struct timeval timeout;
@@ -104,11 +105,12 @@ int main (int argc, char **argv)
     self->timeout.tv_sec = 0;
     self->timeout.tv_usec = 500000;
     self->generated = NULL;
+    self->disable_with_shift = False;
 
     rec_range->device_events.first = KeyPress;
     rec_range->device_events.last = ButtonRelease;
 
-    while ((ch = getopt (argc, argv, "de:t:")) != -1)
+    while ((ch = getopt (argc, argv, "dse:t:")) != -1)
     {
         switch (ch)
         {
@@ -117,6 +119,9 @@ int main (int argc, char **argv)
             break;
         case 'e':
             mapping = optarg;
+            break;
+        case 's':
+            self->disable_with_shift = True; 
             break;
         case 't':
             {
@@ -292,7 +297,7 @@ Key_t *key_add_key (Key_t *keys, KeyCode key)
 }
 
 void handle_key (XCape_t *self, KeyMap_t *key,
-        Bool mouse_pressed, int key_event)
+        Bool mouse_pressed, Bool shift_pressed, int key_event)
 {
     Key_t *k;
 
@@ -304,13 +309,14 @@ void handle_key (XCape_t *self, KeyMap_t *key,
 
         gettimeofday (&key->down_at, NULL);
 
-        if (mouse_pressed)
+        if (mouse_pressed || (shift_pressed && self->disable_with_shift))
         {
+            if (self->debug) fprintf (stdout, "Key Used\n");
             key->used = True;
         }
-    }
-    else
-    {
+    } 
+    else // key event is release:
+    { 
         if (self->debug) fprintf (stdout, "Key released!\n");
         if (key->used == False)
         {
@@ -348,6 +354,7 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
 {
     XCape_t *self = (XCape_t*)user_data;
     static Bool mouse_pressed = False;
+    static Bool shift_pressed = False; // except if shift is held down:
     KeyMap_t *km;
 
     XLockDisplay (self->ctrl_conn);
@@ -390,7 +397,15 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
         {
             mouse_pressed = False;
         }
-        for (km = self->map; km != NULL; km = km->next)
+        if (key_event == 2 && (key_code == 50 || key_code == 62))
+        {
+            shift_pressed = True;
+        } else if (key_event == 3 && (key_code == 50 || key_code == 62))
+        {
+            shift_pressed = False;
+        }
+
+        for (km = self->map; km != NULL; km = km->next) // loop through all remappings
         {
             if ((km->UseKeyCode == False
                     && XkbKeycodeToKeysym (self->ctrl_conn, key_code, 0, 0)
@@ -398,7 +413,7 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
                 || (km->UseKeyCode == True
                     && key_code == km->from_kc))
             {
-                handle_key (self, km, mouse_pressed, key_event);
+                handle_key (self, km, mouse_pressed, shift_pressed, key_event);
             }
             else if (km->pressed
                     && (key_event == KeyPress || key_event == ButtonPress))
@@ -565,6 +580,6 @@ void delete_keys (Key_t *keys)
 
 void print_usage (const char *program_name)
 {
-    fprintf (stdout, "Usage: %s [-d] [-t timeout_ms] [-e <mapping>]\n", program_name);
+    fprintf (stdout, "Usage: %s [-d] [-s] [-t timeout_ms] [-e <mapping>]\n", program_name);
     fprintf (stdout, "Runs as a daemon unless -d flag is set\n");
 }
