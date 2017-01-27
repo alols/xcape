@@ -23,18 +23,22 @@ On Fedora-based systems, run:
 
 Then run:
 
-    $ git clone https://github.com/alols/xcape.git
+    $ git clone https://github.com/burt777/xcape.git
     $ cd xcape
     $ make
     $ sudo make install
 
 Usage
 -----
-    $ xcape [-d] [-t <timeout ms>] [-e <map-expression>]
+    $ xcape [-d] [-s] [-t <timeout ms>] [-e <map-expression>]
 
 ### `-d`
 
 Debug mode. Does not fork into the background.
+
+### `-s`
+
+Disable behaviour when Shift is held down.
 
 ### `-t <timeout ms>`
 
