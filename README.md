@@ -30,11 +30,15 @@ Then run:
 
 Usage
 -----
-    $ xcape [-d] [-t <timeout ms>] [-e <map-expression>]
+    $ xcape [-d] [-f] [-t <timeout ms>] [-e <map-expression>]
 
 ### `-d`
 
-Debug mode. Does not fork into the background.
+Debug mode. Does not fork into the background. Prints debug information.
+
+### `-f`
+
+Foreground mode. Does not fork into the background.
 
 ### `-t <timeout ms>`
 
