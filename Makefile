@@ -1,6 +1,6 @@
 INSTALL=install
-PREFIX=/usr
-MANDIR?=/local/man/man1
+PREFIX=/usr/local
+MANDIR?=/man/man1
 
 TARGET := xcape
 
