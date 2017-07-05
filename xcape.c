@@ -452,26 +452,16 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
         {
             errno = 0;
             fromcode = strtoul (from, NULL, 0); /* dec, oct, hex automatically */
-            if (errno == 0
-                   && fromcode <=255
-                   && XkbKeycodeToKeysym (dpy, (KeyCode) fromcode, 0, 0) != NoSymbol)
+            km->UseKeyCode = True;
+            km->from_kc = (KeyCode) fromcode;
+            if (debug)
             {
-                km->UseKeyCode = True;
-                km->from_kc = (KeyCode) fromcode;
-                if (debug)
-                {
-                  KeySym ks_temp = XkbKeycodeToKeysym (dpy, (KeyCode) fromcode, 0, 0);
-                  fprintf(stderr, "Assigned mapping from from \"%s\" ( keysym 0x%x, "
-                          "key code %d)\n",
-                          XKeysymToString(ks_temp),
-                          (unsigned) ks_temp,
-                          (unsigned) km->from_kc);
-                }
-            }
-            else
-            {
-                fprintf (stderr, "Invalid keycode: %s\n", from);
-                return NULL;
+              KeySym ks_temp = XkbKeycodeToKeysym (dpy, (KeyCode) fromcode, 0, 0);
+              fprintf(stderr, "Assigned mapping from from \"%s\" ( keysym 0x%x, "
+                      "key code %d)\n",
+                      XKeysymToString(ks_temp),
+                      (unsigned) ks_temp,
+                      (unsigned) km->from_kc);
             }
         }
         else
