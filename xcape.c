@@ -62,6 +62,7 @@ typedef struct _XCape_t
     XRecordContext record_ctx;
     pthread_t sigwait_thread;
     sigset_t sigset;
+    Bool foreground;
     Bool debug;
     KeyMap_t *map;
     Key_t *generated;
@@ -100,6 +101,7 @@ int main (int argc, char **argv)
     XRecordRange *rec_range = XRecordAllocRange();
     XRecordClientSpec client_spec = XRecordAllClients;
 
+    self->foreground = False;
     self->debug = False;
     self->timeout.tv_sec = 0;
     self->timeout.tv_usec = 500000;
@@ -108,12 +110,15 @@ int main (int argc, char **argv)
     rec_range->device_events.first = KeyPress;
     rec_range->device_events.last = ButtonRelease;
 
-    while ((ch = getopt (argc, argv, "de:t:")) != -1)
+    while ((ch = getopt (argc, argv, "dfe:t:")) != -1)
     {
         switch (ch)
         {
         case 'd':
             self->debug = True;
+            /* imply -f (no break) */
+        case 'f':
+            self->foreground = True;
             break;
         case 'e':
             mapping = optarg;
@@ -187,7 +192,7 @@ int main (int argc, char **argv)
         exit (EXIT_FAILURE);
     }
 
-    if (self->debug != True)
+    if (self->foreground != True)
         daemon (0, 0);
 
     sigemptyset (&self->sigset);
@@ -565,6 +570,6 @@ void delete_keys (Key_t *keys)
 
 void print_usage (const char *program_name)
 {
-    fprintf (stdout, "Usage: %s [-d] [-t timeout_ms] [-e <mapping>]\n", program_name);
-    fprintf (stdout, "Runs as a daemon unless -d flag is set\n");
+    fprintf (stdout, "Usage: %s [-d] [-f] [-t timeout_ms] [-e <mapping>]\n", program_name);
+    fprintf (stdout, "Runs as a daemon unless -d or -f flag is set\n");
 }

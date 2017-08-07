@@ -1,4 +1,4 @@
-.TH XCAPE 1 2014-02-13 "John Hill" "xcape Manual"
+.TH XCAPE 1 2017-07-03 "John Hill" "xcape Manual"
 
 .SH NAME
 xcape \- use a modifier key as another key
@@ -6,6 +6,7 @@ xcape \- use a modifier key as another key
 .SH SYNOPSIS
 .B xcape
 [\fB-d\fR]
+[\fB-f\fR]
 [\fB-t\fR \fItimeout\fR]
 [\fB-e\fR \fImap-expression\fR]
 
@@ -17,7 +18,10 @@ key in place of \fIControl_L\fR (Left Control).
 .SH OPTIONS
 .TP
 .BR \-d
-Debug mode.  Will run as a foreground process.
+Debug mode.  Will run as a foreground process and print debug information.
+.TP
+.BR \-f
+Foreground mode.  Will run as a foreground process.
 .TP
 .BR \-t " " \fItimeout\fR
 Give a \fItimeout\fR in milliseconds.  If you hold a key longer than
