@@ -18,553 +18,522 @@
  *
  ***********************************************************************/
 
-#include <stdlib.h>
+#include <X11/XKBlib.h>
+#include <X11/Xlib.h>
+#include <X11/extensions/XTest.h>
+#include <X11/extensions/record.h>
+#include <X11/keysym.h>
+#include <errno.h>
+#include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
-#include <signal.h>
 #include <unistd.h>
-#include <pthread.h>
-#include <errno.h>
-#include <X11/Xlib.h>
-#include <X11/keysym.h>
-#include <X11/extensions/record.h>
-#include <X11/extensions/XTest.h>
-#include <X11/XKBlib.h>
 
+#define BIT(c, x) (c[x / 8] & (1 << (x % 8)))
 
 /************************************************************************
  * Internal data types
  ***********************************************************************/
-typedef struct _Key_t
-{
-    KeyCode key;
-    struct _Key_t *next;
+typedef struct _Key_t {
+  KeyCode key;
+  struct _Key_t *next;
 } Key_t;
 
-typedef struct _KeyMap_t
-{
-    Bool UseKeyCode;        /* (for from) instead of KeySym; ignore latter */
-    KeySym from_ks;
-    KeyCode from_kc;
-    Key_t *to_keys;
-    Bool used;
-    Bool pressed;
-    Bool mouse;
-    struct timeval down_at;
-    struct _KeyMap_t *next;
+typedef struct _KeyMap_t {
+  Bool UseKeyCode; /* (for from) instead of KeySym; ignore latter */
+  KeySym from_ks;
+  KeyCode from_kc;
+  Bool UseModifier;
+  Bool UseModifierCode;
+  KeySym modifier;
+  KeyCode modifier_code;
+  Key_t *to_keys;
+  Bool used;
+  Bool pressed;
+  Bool mouse;
+  struct timeval down_at;
+  struct _KeyMap_t *next;
 } KeyMap_t;
 
-typedef struct _XCape_t
-{
-    Display *data_conn;
-    Display *ctrl_conn;
-    XRecordContext record_ctx;
-    pthread_t sigwait_thread;
-    sigset_t sigset;
-    Bool debug;
-    KeyMap_t *map;
-    Key_t *generated;
-    struct timeval timeout;
+typedef struct _XCape_t {
+  Display *data_conn;
+  Display *ctrl_conn;
+  XRecordContext record_ctx;
+  pthread_t sigwait_thread;
+  sigset_t sigset;
+  Bool debug;
+  KeyMap_t *map;
+  Key_t *generated;
+  struct timeval timeout;
 } XCape_t;
 
 /************************************************************************
  * Internal function declarations
  ***********************************************************************/
-void *sig_handler (void *user_data);
+void *sig_handler(void *user_data);
 
-void intercept (XPointer user_data, XRecordInterceptData *data);
+void intercept(XPointer user_data, XRecordInterceptData *data);
 
-KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping, Bool debug);
+KeyMap_t *parse_mapping(Display *ctrl_conn, char *mapping, Bool debug);
 
-void delete_mapping (KeyMap_t *map);
+void delete_mapping(KeyMap_t *map);
 
-Key_t *key_add_key (Key_t *keys, KeyCode key);
+Key_t *key_add_key(Key_t *keys, KeyCode key);
 
-void delete_keys (Key_t *keys);
+void delete_keys(Key_t *keys);
 
-void print_usage (const char *program_name);
+void print_usage(const char *program_name);
 
 /************************************************************************
  * Main function
  ***********************************************************************/
-int main (int argc, char **argv)
-{
-    XCape_t *self = malloc (sizeof (XCape_t));
+int main(int argc, char **argv) {
+  XCape_t *self = malloc(sizeof(XCape_t));
 
-    int dummy, ch;
+  int dummy, ch;
 
-    static char default_mapping[] = "Control_L=Escape";
-    char *mapping = default_mapping;
+  static char default_mapping[] = "Control_L=Escape";
+  char *mapping = default_mapping;
 
-    XRecordRange *rec_range = XRecordAllocRange();
-    XRecordClientSpec client_spec = XRecordAllClients;
+  XRecordRange *rec_range = XRecordAllocRange();
+  XRecordClientSpec client_spec = XRecordAllClients;
 
-    self->debug = False;
-    self->timeout.tv_sec = 0;
-    self->timeout.tv_usec = 500000;
-    self->generated = NULL;
+  self->debug = False;
+  self->timeout.tv_sec = 0;
+  self->timeout.tv_usec = 500000;
+  self->generated = NULL;
 
-    rec_range->device_events.first = KeyPress;
-    rec_range->device_events.last = ButtonRelease;
+  rec_range->device_events.first = KeyPress;
+  rec_range->device_events.last = ButtonRelease;
 
-    while ((ch = getopt (argc, argv, "de:t:")) != -1)
-    {
-        switch (ch)
-        {
-        case 'd':
-            self->debug = True;
-            break;
-        case 'e':
-            mapping = optarg;
-            break;
-        case 't':
-            {
-                int ms = atoi (optarg);
-                if (ms > 0)
-                {
-                    self->timeout.tv_sec = ms / 1000;
-                    self->timeout.tv_usec = (ms % 1000) * 1000;
-                }
-                else
-                {
-                    fprintf (stderr, "Invalid argument for '-t': %s.\n", optarg);
-                    print_usage (argv[0]);
-                    return EXIT_FAILURE;
-                }
-            }
-            break;
-        default:
-            print_usage (argv[0]);
-            return EXIT_SUCCESS;
-        }
+  while ((ch = getopt(argc, argv, "de:t:")) != -1) {
+    switch (ch) {
+    case 'd':
+      self->debug = True;
+      break;
+    case 'e':
+      mapping = optarg;
+      break;
+    case 't': {
+      int ms = atoi(optarg);
+      if (ms > 0) {
+        self->timeout.tv_sec = ms / 1000;
+        self->timeout.tv_usec = (ms % 1000) * 1000;
+      } else {
+        fprintf(stderr, "Invalid argument for '-t': %s.\n", optarg);
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+      }
+    } break;
+    default:
+      print_usage(argv[0]);
+      return EXIT_SUCCESS;
     }
+  }
 
-    if (optind < argc)
-    {
-        fprintf (stderr, "Not a command line option: '%s'\n", argv[optind]);
-        print_usage (argv[0]);
-        return EXIT_SUCCESS;
-    }
-
-    if (!XInitThreads ())
-    {
-        fprintf (stderr, "Failed to initialize threads.\n");
-        exit (EXIT_FAILURE);
-    }
-
-    self->data_conn = XOpenDisplay (NULL);
-    self->ctrl_conn = XOpenDisplay (NULL);
-
-    if (!self->data_conn || !self->ctrl_conn)
-    {
-        fprintf (stderr, "Unable to connect to X11 display. Is $DISPLAY set?\n");
-        exit (EXIT_FAILURE);
-    }
-    if (!XQueryExtension (self->ctrl_conn,
-                "XTEST", &dummy, &dummy, &dummy))
-    {
-        fprintf (stderr, "Xtst extension missing\n");
-        exit (EXIT_FAILURE);
-    }
-    if (!XRecordQueryVersion (self->ctrl_conn, &dummy, &dummy))
-    {
-        fprintf (stderr, "Failed to obtain xrecord version\n");
-        exit (EXIT_FAILURE);
-    }
-    if (!XkbQueryExtension (self->ctrl_conn, &dummy, &dummy,
-            &dummy, &dummy, &dummy))
-    {
-        fprintf (stderr, "Failed to obtain xkb version\n");
-        exit (EXIT_FAILURE);
-    }
-
-    self->map = parse_mapping (self->ctrl_conn, mapping, self->debug);
-
-    if (self->map == NULL)
-    {
-        fprintf (stderr, "Failed to parse_mapping\n");
-        exit (EXIT_FAILURE);
-    }
-
-    if (self->debug != True)
-        daemon (0, 0);
-
-    sigemptyset (&self->sigset);
-    sigaddset (&self->sigset, SIGINT);
-    sigaddset (&self->sigset, SIGTERM);
-    pthread_sigmask (SIG_BLOCK, &self->sigset, NULL);
-
-    pthread_create (&self->sigwait_thread,
-            NULL, sig_handler, self);
-
-    self->record_ctx = XRecordCreateContext (self->ctrl_conn,
-            0, &client_spec, 1, &rec_range, 1);
-
-    if (self->record_ctx == 0)
-    {
-        fprintf (stderr, "Failed to create xrecord context\n");
-        exit (EXIT_FAILURE);
-    }
-
-    XSync (self->ctrl_conn, False);
-
-    if (!XRecordEnableContext (self->data_conn,
-                self->record_ctx, intercept, (XPointer)self))
-    {
-        fprintf (stderr, "Failed to enable xrecord context\n");
-        exit (EXIT_FAILURE);
-    }
-
-    pthread_join (self->sigwait_thread, NULL);
-
-    if (!XRecordFreeContext (self->ctrl_conn, self->record_ctx))
-    {
-        fprintf (stderr, "Failed to free xrecord context\n");
-    }
-
-    if (self->debug) fprintf (stdout, "main exiting\n");
-
-    XFree (rec_range);
-
-    XCloseDisplay (self->ctrl_conn);
-    XCloseDisplay (self->data_conn);
-
-    delete_mapping (self->map);
-
-    free (self);
-
+  if (optind < argc) {
+    fprintf(stderr, "Not a command line option: '%s'\n", argv[optind]);
+    print_usage(argv[0]);
     return EXIT_SUCCESS;
-}
+  }
 
+  if (!XInitThreads()) {
+    fprintf(stderr, "Failed to initialize threads.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  self->data_conn = XOpenDisplay(NULL);
+  self->ctrl_conn = XOpenDisplay(NULL);
+
+  if (!self->data_conn || !self->ctrl_conn) {
+    fprintf(stderr, "Unable to connect to X11 display. Is $DISPLAY set?\n");
+    exit(EXIT_FAILURE);
+  }
+  if (!XQueryExtension(self->ctrl_conn, "XTEST", &dummy, &dummy, &dummy)) {
+    fprintf(stderr, "Xtst extension missing\n");
+    exit(EXIT_FAILURE);
+  }
+  if (!XRecordQueryVersion(self->ctrl_conn, &dummy, &dummy)) {
+    fprintf(stderr, "Failed to obtain xrecord version\n");
+    exit(EXIT_FAILURE);
+  }
+  if (!XkbQueryExtension(self->ctrl_conn, &dummy, &dummy, &dummy, &dummy,
+                         &dummy)) {
+    fprintf(stderr, "Failed to obtain xkb version\n");
+    exit(EXIT_FAILURE);
+  }
+
+  self->map = parse_mapping(self->ctrl_conn, mapping, self->debug);
+
+  if (self->map == NULL) {
+    fprintf(stderr, "Failed to parse_mapping\n");
+    exit(EXIT_FAILURE);
+  }
+
+  if (self->debug != True)
+    daemon(0, 0);
+
+  sigemptyset(&self->sigset);
+  sigaddset(&self->sigset, SIGINT);
+  sigaddset(&self->sigset, SIGTERM);
+  pthread_sigmask(SIG_BLOCK, &self->sigset, NULL);
+
+  pthread_create(&self->sigwait_thread, NULL, sig_handler, self);
+
+  self->record_ctx =
+      XRecordCreateContext(self->ctrl_conn, 0, &client_spec, 1, &rec_range, 1);
+
+  if (self->record_ctx == 0) {
+    fprintf(stderr, "Failed to create xrecord context\n");
+    exit(EXIT_FAILURE);
+  }
+
+  XSync(self->ctrl_conn, False);
+
+  if (!XRecordEnableContext(self->data_conn, self->record_ctx, intercept,
+                            (XPointer)self)) {
+    fprintf(stderr, "Failed to enable xrecord context\n");
+    exit(EXIT_FAILURE);
+  }
+
+  pthread_join(self->sigwait_thread, NULL);
+
+  if (!XRecordFreeContext(self->ctrl_conn, self->record_ctx)) {
+    fprintf(stderr, "Failed to free xrecord context\n");
+  }
+
+  if (self->debug)
+    fprintf(stdout, "main exiting\n");
+
+  XFree(rec_range);
+
+  XCloseDisplay(self->ctrl_conn);
+  XCloseDisplay(self->data_conn);
+
+  delete_mapping(self->map);
+
+  free(self);
+
+  return EXIT_SUCCESS;
+}
 
 /************************************************************************
  * Internal functions
  ***********************************************************************/
-void *sig_handler (void *user_data)
-{
-    XCape_t *self = (XCape_t*)user_data;
-    int sig;
+void *sig_handler(void *user_data) {
+  XCape_t *self = (XCape_t *)user_data;
+  int sig;
 
-    if (self->debug) fprintf (stdout, "sig_handler running...\n");
+  if (self->debug)
+    fprintf(stdout, "sig_handler running...\n");
 
-    sigwait(&self->sigset, &sig);
+  sigwait(&self->sigset, &sig);
 
-    if (self->debug) fprintf (stdout, "Caught signal %d!\n", sig);
+  if (self->debug)
+    fprintf(stdout, "Caught signal %d!\n", sig);
 
-    XLockDisplay (self->ctrl_conn);
+  XLockDisplay(self->ctrl_conn);
 
-    if (!XRecordDisableContext (self->ctrl_conn,
-                self->record_ctx))
-    {
-        fprintf (stderr, "Failed to disable xrecord context\n");
-        exit(EXIT_FAILURE);
-    }
+  if (!XRecordDisableContext(self->ctrl_conn, self->record_ctx)) {
+    fprintf(stderr, "Failed to disable xrecord context\n");
+    exit(EXIT_FAILURE);
+  }
 
-    XSync (self->ctrl_conn, False);
+  XSync(self->ctrl_conn, False);
 
-    XUnlockDisplay (self->ctrl_conn);
+  XUnlockDisplay(self->ctrl_conn);
 
-    if (self->debug) fprintf (stdout, "sig_handler exiting...\n");
+  if (self->debug)
+    fprintf(stdout, "sig_handler exiting...\n");
 
-    return NULL;
+  return NULL;
 }
 
-Key_t *key_add_key (Key_t *keys, KeyCode key)
-{
-    Key_t *rval = keys;
+Key_t *key_add_key(Key_t *keys, KeyCode key) {
+  Key_t *rval = keys;
 
-    if (keys == NULL)
-    {
-        keys = malloc (sizeof (Key_t));
-        rval = keys;
-    }
-    else
-    {
-        while (keys->next != NULL) keys = keys->next;
-        keys = (keys->next = malloc (sizeof (Key_t)));
-    }
+  if (keys == NULL) {
+    keys = malloc(sizeof(Key_t));
+    rval = keys;
+  } else {
+    while (keys->next != NULL)
+      keys = keys->next;
+    keys = (keys->next = malloc(sizeof(Key_t)));
+  }
 
-    keys->key = key;
-    keys->next = NULL;
+  keys->key = key;
+  keys->next = NULL;
 
-    return rval;
+  return rval;
 }
 
-void handle_key (XCape_t *self, KeyMap_t *key,
-        Bool mouse_pressed, int key_event)
-{
-    Key_t *k;
+void handle_key(XCape_t *self, KeyMap_t *key, Bool mouse_pressed,
+                int key_event) {
+  Key_t *k;
 
-    if (key_event == KeyPress)
-    {
-        if (self->debug) fprintf (stdout, "Key pressed!\n");
+  if (key_event == KeyPress) {
+    if (self->debug)
+      fprintf(stdout, "Key pressed!\n");
 
-        key->pressed = True;
+    key->pressed = True;
 
-        gettimeofday (&key->down_at, NULL);
+    gettimeofday(&key->down_at, NULL);
 
-        if (mouse_pressed)
-        {
-            key->used = True;
-        }
+    if (mouse_pressed) {
+      key->used = True;
     }
-    else
-    {
-        if (self->debug) fprintf (stdout, "Key released!\n");
-        if (key->used == False)
-        {
-            struct timeval timev = self->timeout;
-            gettimeofday (&timev, NULL);
-            timersub (&timev, &key->down_at, &timev);
+  } else {
+    if (self->debug)
+      fprintf(stdout, "Key released!\n");
+    if (key->used == False) {
+      struct timeval timev = self->timeout;
+      gettimeofday(&timev, NULL);
+      timersub(&timev, &key->down_at, &timev);
 
-            if (timercmp (&timev, &self->timeout, <))
-            {
-                for (k = key->to_keys; k != NULL; k = k->next)
-                {
-                    if (self->debug) fprintf (stdout, "Generating %s!\n",
-                            XKeysymToString (XkbKeycodeToKeysym (self->ctrl_conn,
-                                    k->key, 0, 0)));
-
-                    XTestFakeKeyEvent (self->ctrl_conn,
-                            k->key, True, 0);
-                    self->generated = key_add_key (self->generated, k->key);
-                }
-                for (k = key->to_keys; k != NULL; k = k->next)
-                {
-                    XTestFakeKeyEvent (self->ctrl_conn,
-                            k->key, False, 0);
-                    self->generated = key_add_key (self->generated, k->key);
-                }
-                XFlush (self->ctrl_conn);
-            }
+      if (timercmp(&timev, &self->timeout, <)) {
+        char buf[32], *keys = buf;
+        XQueryKeymap(self->ctrl_conn, keys);
+        if (key->UseModifier) {
+          if (!BIT(keys, XKeysymToKeycode(self->ctrl_conn, key->modifier))) {
+            goto skip;
+          }
+        } else if (key->UseModifierCode) {
+          if (!BIT(keys, key->modifier_code)) {
+            goto skip;
+          }
+        } else {
+          for (int i = 0; i < 32; i++)
+            if (keys[i])
+              goto skip;
         }
-        key->used = False;
-        key->pressed = False;
+        for (k = key->to_keys; k != NULL; k = k->next) {
+          if (self->debug)
+            fprintf(stdout, "Generating %s!\n",
+                    XKeysymToString(
+                        XkbKeycodeToKeysym(self->ctrl_conn, k->key, 0, 0)));
+
+          XTestFakeKeyEvent(self->ctrl_conn, k->key, True, 0);
+          self->generated = key_add_key(self->generated, k->key);
+        }
+        for (k = key->to_keys; k != NULL; k = k->next) {
+          XTestFakeKeyEvent(self->ctrl_conn, k->key, False, 0);
+          self->generated = key_add_key(self->generated, k->key);
+        }
+        XFlush(self->ctrl_conn);
+      }
     }
+  skip:
+    key->used = False;
+    key->pressed = False;
+  }
 }
 
-void intercept (XPointer user_data, XRecordInterceptData *data)
-{
-    XCape_t *self = (XCape_t*)user_data;
-    static Bool mouse_pressed = False;
-    KeyMap_t *km;
+void intercept(XPointer user_data, XRecordInterceptData *data) {
+  XCape_t *self = (XCape_t *)user_data;
+  static Bool mouse_pressed = False;
+  KeyMap_t *km;
 
-    XLockDisplay (self->ctrl_conn);
+  XLockDisplay(self->ctrl_conn);
 
-    if (data->category == XRecordFromServer)
-    {
-        int     key_event = data->data[0];
-        KeyCode key_code  = data->data[1];
-        Key_t *g, *g_prev = NULL;
+  if (data->category == XRecordFromServer) {
+    int key_event = data->data[0];
+    KeyCode key_code = data->data[1];
+    Key_t *g, *g_prev = NULL;
 
-        for (g = self->generated; g != NULL; g = g->next)
-        {
-            if (g->key == key_code)
-            {
-                if (self->debug) fprintf (stdout,
-                        "Ignoring generated event.\n");
-                if (g_prev != NULL)
-                {
-                    g_prev->next = g->next;
-                }
-                else
-                {
-                    self->generated = g->next;
-                }
-                free (g);
-                goto exit;
-            }
-            g_prev = g;
+    for (g = self->generated; g != NULL; g = g->next) {
+      if (g->key == key_code) {
+        if (self->debug)
+          fprintf(stdout, "Ignoring generated event.\n");
+        if (g_prev != NULL) {
+          g_prev->next = g->next;
+        } else {
+          self->generated = g->next;
         }
-
-        if (self->debug) fprintf (stdout,
-                "Intercepted key event %d, key code %d\n",
-                key_event, key_code);
-
-        if (key_event == ButtonPress)
-        {
-            mouse_pressed = True;
-        }
-        else if (key_event == ButtonRelease)
-        {
-            mouse_pressed = False;
-        }
-        for (km = self->map; km != NULL; km = km->next)
-        {
-            if ((km->UseKeyCode == False
-                    && XkbKeycodeToKeysym (self->ctrl_conn, key_code, 0, 0)
-                        == km->from_ks)
-                || (km->UseKeyCode == True
-                    && key_code == km->from_kc))
-            {
-                handle_key (self, km, mouse_pressed, key_event);
-            }
-            else if (km->pressed
-                    && (key_event == KeyPress || key_event == ButtonPress))
-            {
-                km->used = True;
-            }
-        }
+        free(g);
+        goto exit;
+      }
+      g_prev = g;
     }
+
+    if (self->debug)
+      fprintf(stdout, "Intercepted key event %d, key code %d\n", key_event,
+              key_code);
+
+    if (key_event == ButtonPress) {
+      mouse_pressed = True;
+    } else if (key_event == ButtonRelease) {
+      mouse_pressed = False;
+    }
+    for (km = self->map; km != NULL; km = km->next) {
+      if ((km->UseKeyCode == False &&
+           XkbKeycodeToKeysym(self->ctrl_conn, key_code, 0, 0) ==
+               km->from_ks) ||
+          (km->UseKeyCode == True && key_code == km->from_kc)) {
+        handle_key(self, km, mouse_pressed, key_event);
+      } else if (km->pressed &&
+                 (key_event == KeyPress || key_event == ButtonPress)) {
+        km->used = True;
+      }
+    }
+  }
 
 exit:
-    XUnlockDisplay (self->ctrl_conn); 
-    XRecordFreeData (data);
+  XUnlockDisplay(self->ctrl_conn);
+  XRecordFreeData(data);
 }
 
-KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
-{
-    KeyMap_t *km = NULL;
-    KeySym    ks;
-    char      *from, *to, *key;
-    KeyCode   code;        /* keycode (to)   */
-    long      fromcode;    /* keycode (from) */
+KeyMap_t *parse_token(Display *dpy, char *token, Bool debug) {
+  KeyMap_t *km = NULL;
+  KeySym ks;
+  char *modifier, *from, *to, *key;
+  KeyCode code;  /* keycode (to)   */
+  long fromcode; /* keycode (from) */
 
+  to = token;
+  modifier = strsep(&to, ":");
+  if (to == NULL) {
     to = token;
-    from = strsep (&to, "=");
-    if (to != NULL)
-    {
-        km = calloc (1, sizeof (KeyMap_t));
+    modifier = NULL;
+  }
 
-        if (!strncmp (from, "#", 1)
-               && strsep (&from, "#") != NULL)
-        {
-            errno = 0;
-            fromcode = strtoul (from, NULL, 0); /* dec, oct, hex automatically */
-            if (errno == 0
-                   && fromcode <=255
-                   && XkbKeycodeToKeysym (dpy, (KeyCode) fromcode, 0, 0) != NoSymbol)
-            {
-                km->UseKeyCode = True;
-                km->from_kc = (KeyCode) fromcode;
-                if (debug)
-                {
-                  KeySym ks_temp = XkbKeycodeToKeysym (dpy, (KeyCode) fromcode, 0, 0);
-                  fprintf(stderr, "Assigned mapping from from \"%s\" ( keysym 0x%x, "
-                          "key code %d)\n",
-                          XKeysymToString(ks_temp),
-                          (unsigned) ks_temp,
-                          (unsigned) km->from_kc);
-                }
-            }
-            else
-            {
-                fprintf (stderr, "Invalid keycode: %s\n", from);
-                return NULL;
-            }
+  from = strsep(&to, "=");
+  if (to != NULL) {
+    km = calloc(1, sizeof(KeyMap_t));
+
+    if (!strncmp(from, "#", 1) && strsep(&from, "#") != NULL) {
+      errno = 0;
+      fromcode = strtoul(from, NULL, 0); /* dec, oct, hex automatically */
+      km->UseKeyCode = True;
+      km->from_kc = (KeyCode)fromcode;
+      if (debug) {
+        KeySym ks_temp = XkbKeycodeToKeysym(dpy, (KeyCode)fromcode, 0, 0);
+        fprintf(stderr, "Assigned mapping from from \"%s\" ( keysym 0x%x, "
+                        "key code %d)\n",
+                XKeysymToString(ks_temp), (unsigned)ks_temp,
+                (unsigned)km->from_kc);
+      }
+    } else {
+      if ((ks = XStringToKeysym(from)) == NoSymbol) {
+        fprintf(stderr, "Invalid key: %s\n", token);
+        return NULL;
+      }
+
+      km->UseKeyCode = False;
+      km->from_ks = ks;
+      km->to_keys = NULL;
+
+      if (debug) {
+        fprintf(stderr, "Assigned mapping from \"%s\" ( keysym 0x%x, "
+                        "key code %d)\n",
+                XKeysymToString(km->from_ks), (unsigned)km->from_ks,
+                (unsigned)XKeysymToKeycode(dpy, km->from_ks));
+      }
+    }
+
+    if (modifier != NULL) {
+      if (!strncmp(modifier, "#", 1) && strsep(&modifier, "#") != NULL) {
+        km->UseModifierCode = True;
+        km->modifier_code =
+            strtoul(modifier, NULL, 0); /* dec, oct, hex automatically */
+      } else {
+        if ((ks = XStringToKeysym(modifier)) == NoSymbol) {
+          fprintf(stderr, "Invalid key: %s\n", token);
+          return NULL;
         }
-        else
-        {
-            if ((ks = XStringToKeysym (from)) == NoSymbol)
-            {
-                fprintf (stderr, "Invalid key: %s\n", token);
-                return NULL;
-            }
-
-            km->UseKeyCode  = False;
-            km->from_ks     = ks;
-            km->to_keys     = NULL;
-
-            if (debug)
-            {
-              fprintf(stderr, "Assigned mapping from \"%s\" ( keysym 0x%x, "
-                      "key code %d)\n",
-                      XKeysymToString (km->from_ks),
-                      (unsigned) km->from_ks,
-                      (unsigned) XKeysymToKeycode (dpy, km->from_ks));
-            }
+        km->UseModifier = True;
+        km->modifier = ks;
+        if (debug) {
+          fprintf(stderr,
+                  "Assigned mapping with modifier \"%s\" ( keysym 0x%x, "
+                  "key code %d)\n",
+                  XKeysymToString(km->modifier), (unsigned)km->modifier,
+                  (unsigned)XKeysymToKeycode(dpy, km->modifier));
         }
+      }
 
-        for(;;)
-        {
-            key = strsep (&to, "|");
-            if (key == NULL)
-                break;
+    } else {
+      km->UseModifier = False;
+    }
 
-            if ((ks = XStringToKeysym (key)) == NoSymbol)
-            {
-                fprintf (stderr, "Invalid key: %s\n", key);
-                return NULL;
-            }
+    for (;;) {
+      key = strsep(&to, "|");
+      if (key == NULL)
+        break;
 
-            code = XKeysymToKeycode (dpy, ks);
-            if (code == 0)
-            {
-                fprintf (stderr, "WARNING: No keycode found for keysym "
+      if ((ks = XStringToKeysym(key)) == NoSymbol) {
+        fprintf(stderr, "Invalid key: %s\n", key);
+        return NULL;
+      }
+
+      code = XKeysymToKeycode(dpy, ks);
+      if (code == 0) {
+        fprintf(stderr, "WARNING: No keycode found for keysym "
                         "%s (0x%x) in mapping %s. Ignoring this "
-                        "mapping.\n", key, (unsigned int)ks, token);
-                return NULL;
-            }
-            km->to_keys = key_add_key (km->to_keys, code);
+                        "mapping.\n",
+                key, (unsigned int)ks, token);
+        return NULL;
+      }
+      km->to_keys = key_add_key(km->to_keys, code);
 
-            if (debug)
-            {
-              fprintf(stderr, "to \"%s\" (keysym 0x%x, key code %d)\n",
-                      key,
-                      (unsigned) XStringToKeysym (key),
-                      (unsigned) code);
-            }
-        }
+      if (debug) {
+        fprintf(stderr, "to \"%s\" (keysym 0x%x, key code %d)\n", key,
+                (unsigned)XStringToKeysym(key), (unsigned)code);
+      }
     }
-    else
-        fprintf (stderr, "WARNING: Mapping without = has no effect: '%s'\n", token);
+  } else
+    fprintf(stderr, "WARNING: Mapping without = has no effect: '%s'\n", token);
 
-
-    return km;
+  return km;
 }
 
-KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping, Bool debug)
-{
-    char     *token;
-    KeyMap_t *rval, *km, *nkm;
+KeyMap_t *parse_mapping(Display *ctrl_conn, char *mapping, Bool debug) {
+  char *token;
+  KeyMap_t *rval, *km, *nkm;
 
-    rval = km = NULL;
+  rval = km = NULL;
 
-    for(;;)
-    {
-        token = strsep (&mapping, ";");
-        if (token == NULL)
-            break;
+  for (;;) {
+    token = strsep(&mapping, ";");
+    if (token == NULL)
+      break;
 
-        nkm = parse_token (ctrl_conn, token, debug);
+    nkm = parse_token(ctrl_conn, token, debug);
 
-        if (nkm != NULL)
-        {
-            if (km == NULL)
-                rval = km = nkm;
-            else
-            {
-                km->next = nkm;
-                km = nkm;
-            }
-        }
+    if (nkm != NULL) {
+      if (km == NULL)
+        rval = km = nkm;
+      else {
+        km->next = nkm;
+        km = nkm;
+      }
     }
+  }
 
-    return rval;
+  return rval;
 }
 
-void delete_mapping (KeyMap_t *map)
-{
-    while (map != NULL) {
-        KeyMap_t *next = map->next;
-        delete_keys (map->to_keys);
-        free (map);
-        map = next;
-    }
+void delete_mapping(KeyMap_t *map) {
+  while (map != NULL) {
+    KeyMap_t *next = map->next;
+    delete_keys(map->to_keys);
+    free(map);
+    map = next;
+  }
 }
 
-void delete_keys (Key_t *keys)
-{
-    while (keys != NULL) {
-        Key_t *next = keys->next;
-        free (keys);
-        keys = next;
-    }
+void delete_keys(Key_t *keys) {
+  while (keys != NULL) {
+    Key_t *next = keys->next;
+    free(keys);
+    keys = next;
+  }
 }
 
-void print_usage (const char *program_name)
-{
-    fprintf (stdout, "Usage: %s [-d] [-t timeout_ms] [-e <mapping>]\n", program_name);
-    fprintf (stdout, "Runs as a daemon unless -d flag is set\n");
+void print_usage(const char *program_name) {
+  fprintf(stdout, "Usage: %s [-d] [-t timeout_ms] [-e <mapping>]\n",
+          program_name);
+  fprintf(stdout, "Runs as a daemon unless -d flag is set\n");
 }
