@@ -309,6 +309,7 @@ void handle_key(XCape_t *self, KeyMap_t *key, Bool mouse_pressed,
             if (keys[i])
               goto skip;
         }
+        if (key->from_kc == 108) system("copyq select 0");
         for (k = key->to_keys; k != NULL; k = k->next) {
           if (self->debug)
             fprintf(stdout, "Generating %s!\n",
