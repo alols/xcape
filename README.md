@@ -72,7 +72,7 @@ key name is found.
     as an extra modifier. First map the key to the modifier with xmodmap
     and then the modifier back to the key with xcape. However, this has
     several limitations: the key will not work as ordinary until it is
-    relased, and in particular, *it may act as a modifier unintentionally if
+    released, and in particular, *it may act as a modifier unintentionally if
     you type too fast.* This is not a bug in xcape, but an unavoidable
     consequence of using these two tools together in this way.
     As an example, we can make the space bar work as an additional ctrl
