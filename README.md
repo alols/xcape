@@ -68,7 +68,7 @@ key name is found.
 
         xcape -e 'Shift_L=Escape;Control_L=Control_L|O'
 
-+   In conjugation with xmodmap it is possible to make an ordinary key act
++   In conjunction with xmodmap it is possible to make an ordinary key act
     as an extra modifier. First map the key to the modifier with xmodmap
     and then the modifier back to the key with xcape. However, this has
     several limitations: the key will not work as ordinary until it is
