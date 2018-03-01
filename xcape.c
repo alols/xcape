@@ -423,8 +423,8 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
     KeyMap_t *km = NULL;
     KeySym    ks;
     char      *from, *to, *key;
-    KeyCode   code;        /* keycode (to)   */
-    long      fromcode;    /* keycode (from) */
+    KeyCode   code;           /* keycode */
+    long      parsed_code;    /* parsed keycode value */
 
     to = token;
     from = strsep (&to, "=");
@@ -436,17 +436,17 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
                && strsep (&from, "#") != NULL)
         {
             errno = 0;
-            fromcode = strtoul (from, NULL, 0); /* dec, oct, hex automatically */
+            parsed_code = strtoul (from, NULL, 0); /* dec, oct, hex automatically */
             if (errno == 0
-                   && fromcode <=255
-                   && XkbKeycodeToKeysym (dpy, (KeyCode) fromcode, 0, 0) != NoSymbol)
+                   && parsed_code <=255
+                   && XkbKeycodeToKeysym (dpy, (KeyCode) parsed_code, 0, 0) != NoSymbol)
             {
                 km->UseKeyCode = True;
-                km->from_kc = (KeyCode) fromcode;
+                km->from_kc = (KeyCode) parsed_code;
                 if (debug)
                 {
-                  KeySym ks_temp = XkbKeycodeToKeysym (dpy, (KeyCode) fromcode, 0, 0);
-                  fprintf(stderr, "Assigned mapping from from \"%s\" ( keysym 0x%x, "
+                  KeySym ks_temp = XkbKeycodeToKeysym (dpy, (KeyCode) parsed_code, 0, 0);
+                  fprintf(stderr, "Assigned mapping from \"%s\" ( keysym 0x%x, "
                           "key code %d)\n",
                           XKeysymToString(ks_temp),
                           (unsigned) ks_temp,
@@ -487,28 +487,47 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
             if (key == NULL)
                 break;
 
-            if ((ks = XStringToKeysym (key)) == NoSymbol)
+            if (!strncmp (key, "#", 1)
+                   && strsep (&key, "#") != NULL)
             {
-                fprintf (stderr, "Invalid key: %s\n", key);
-                return NULL;
+                errno = 0;
+                parsed_code = strtoul (key, NULL, 0); /* dec, oct, hex automatically */
+                if (!(errno == 0
+                      && parsed_code <=255
+                      && XkbKeycodeToKeysym (dpy, (KeyCode) parsed_code, 0, 0) != NoSymbol))
+                {
+                    fprintf (stderr, "Invalid keycode: %s\n", key);
+                    return NULL;
+                }
+
+                code = (KeyCode) parsed_code;
+            }
+            else
+            {
+                if ((ks = XStringToKeysym (key)) == NoSymbol)
+                {
+                    fprintf (stderr, "Invalid key: %s\n", key);
+                    return NULL;
+                }
+
+                code = XKeysymToKeycode (dpy, ks);
+                if (code == 0)
+                {
+                    fprintf (stderr, "WARNING: No keycode found for keysym "
+                            "%s (0x%x) in mapping %s. Ignoring this "
+                            "mapping.\n", key, (unsigned int)ks, token);
+                    return NULL;
+                }
             }
 
-            code = XKeysymToKeycode (dpy, ks);
-            if (code == 0)
-            {
-                fprintf (stderr, "WARNING: No keycode found for keysym "
-                        "%s (0x%x) in mapping %s. Ignoring this "
-                        "mapping.\n", key, (unsigned int)ks, token);
-                return NULL;
-            }
             km->to_keys = key_add_key (km->to_keys, code);
-
             if (debug)
             {
+              KeySym ks_temp = XkbKeycodeToKeysym (dpy, code, 0, 0);
               fprintf(stderr, "to \"%s\" (keysym 0x%x, key code %d)\n",
-                      key,
-                      (unsigned) XStringToKeysym (key),
-                      (unsigned) code);
+                  XKeysymToString(ks_temp),
+                  (unsigned) ks_temp,
+                  (unsigned) code);
             }
         }
     }
