@@ -76,6 +76,8 @@ void *sig_handler (void *user_data);
 
 void intercept (XPointer user_data, XRecordInterceptData *data);
 
+KeyMap_t *parse_confs (Display *ctrl_conn, char **files, size_t n_confs, Bool debug);
+
 KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping, Bool debug);
 
 void delete_mapping (KeyMap_t *map);
@@ -97,6 +99,8 @@ int main (int argc, char **argv)
 
     static char default_mapping[] = "Control_L=Escape";
     char *mapping = default_mapping;
+    char **conf_files = NULL;
+    size_t n_conf = 0;
 
     XRecordRange *rec_range = XRecordAllocRange();
     XRecordClientSpec client_spec = XRecordAllClients;
@@ -147,9 +151,14 @@ int main (int argc, char **argv)
 
     if (optind < argc)
     {
-        fprintf (stderr, "Not a command line option: '%s'\n", argv[optind]);
-        print_usage (argv[0]);
-        return EXIT_SUCCESS;
+        if(mapping == default_mapping){
+            conf_files = argv + optind;
+            n_conf = argc - optind;
+        }else{
+            fprintf (stderr, "Not a command line option: '%s'\n", argv[optind]);
+            print_usage (argv[0]);
+            return EXIT_SUCCESS;
+        }
     }
 
     if (!XInitThreads ())
@@ -190,6 +199,25 @@ int main (int argc, char **argv)
     {
         fprintf (stderr, "Failed to parse_mapping\n");
         exit (EXIT_FAILURE);
+    }
+
+    if (conf_files)
+    {
+        KeyMap_t *conf_map = parse_confs (self->ctrl_conn, conf_files, n_conf, self->debug);
+        if (conf_map == NULL)
+        {
+            fprintf (stderr, "Failed to parse_confs\n");
+            exit (EXIT_FAILURE);
+        }
+
+        if (self->map)
+        {
+            self->map->next = conf_map;
+        }
+        else
+        {
+            self->map = conf_map;
+        }
     }
 
     if (self->foreground != True)
@@ -438,7 +466,7 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
             errno = 0;
             parsed_code = strtoul (from, NULL, 0); /* dec, oct, hex automatically */
             if (errno == 0
-                   && parsed_code <=255
+                   && parsed_code <= 255
                    && XkbKeycodeToKeysym (dpy, (KeyCode) parsed_code, 0, 0) != NoSymbol)
             {
                 km->UseKeyCode = True;
@@ -538,6 +566,77 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
     return km;
 }
 
+char *read_line (FILE *file)
+{
+    /* TODO read arbitrary line size */
+    size_t bufsz = 1024;
+    char buffer[bufsz];
+    if (fgets(buffer, bufsz, file) == NULL)
+    {
+        return NULL;
+    }
+    char *line = strdup(buffer);
+    size_t nlen = strlen(line);
+    /* remove newline characters */
+    switch(line[nlen - 1]){
+    case '\n':
+        if(nlen >= 2 && line[nlen - 2] == '\r')
+            --nlen;
+    /* FALLTHROUGH */
+    case '\r':
+        line[nlen - 1] = '\0';
+        break;
+    }
+    return line;
+}
+
+KeyMap_t *parse_confs (Display *ctrl_conn, char **files, size_t n_confs, Bool debug)
+{
+    KeyMap_t *rval = NULL;
+    KeyMap_t **walker = &rval;
+    for(size_t i = 0; i < n_confs; ++i)
+    {
+        Bool close = True;
+        char *filename = files[i];
+        FILE *file = NULL;
+
+        if(!strcmp(filename, "-"))
+        {
+            close = False;
+            file = stdin;
+        }
+        else
+        {
+            close = True;
+            file = fopen (filename, "r");
+            if (file == NULL)
+            {
+                fprintf (stderr, "unable to open file %s: %s\n", filename, strerror(errno));
+                break;
+            }
+        }
+
+        /* read and parse file */
+        char *line = NULL;
+        while((line = read_line(file)) != NULL)
+        {
+            *walker = parse_token(ctrl_conn, line, debug);
+            free(line);
+            if(*walker == NULL)
+            {
+                break;
+            }
+            walker = &(*walker)->next;
+        }
+
+        if(close)
+        {
+            fclose (file);
+        }
+    }
+    return rval;
+}
+
 KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping, Bool debug)
 {
     char     *token;
@@ -589,6 +688,6 @@ void delete_keys (Key_t *keys)
 
 void print_usage (const char *program_name)
 {
-    fprintf (stdout, "Usage: %s [-d] [-f] [-t timeout_ms] [-e <mapping>]\n", program_name);
+    fprintf (stdout, "Usage: %s [file] [-d] [-f] [-t timeout_ms] [-e <mapping>]\n", program_name);
     fprintf (stdout, "Runs as a daemon unless -d or -f flag is set\n");
 }

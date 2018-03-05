@@ -5,6 +5,7 @@ xcape \- use a modifier key as another key
 
 .SH SYNOPSIS
 .B xcape
+[file ...]
 [\fB-d\fR]
 [\fB-f\fR]
 [\fB-t\fR \fItimeout\fR]
@@ -16,6 +17,10 @@ and released on its own. The default behaviour is to generate the \fIEscape\fR
 key in place of \fIControl_L\fR (Left Control).
 
 .SH OPTIONS
+.TP
+.BR file\ ...
+Configuration Files. Expressions will be read from the files in a line-by-line
+manner. "\-" can be used to read from standard input.
 .TP
 .BR \-d
 Debug mode.  Will run as a foreground process and print debug information.
