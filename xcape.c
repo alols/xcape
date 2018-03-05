@@ -562,26 +562,40 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
 
 char *read_line (FILE *file)
 {
-    /* TODO read arbitrary line size */
-    size_t bufsz = 1024;
-    char buffer[bufsz];
-    if (fgets (buffer, bufsz, file) == NULL)
+    size_t cap = 1024;
+    size_t nlen = 0;
+    char *line = realloc (NULL, cap*sizeof(char));
+
+    int c = EOF;
+    int reading = 1;
+    while (reading)
     {
-        return NULL;
+        c = fgetc(file);
+        if (nlen == cap)
+        {
+            cap *= 2;
+            line = realloc (line, cap*sizeof(char));
+        }
+        switch (c)
+        {
+        case '\r': /* FALLTHROUGH */
+        case '\n': /* FALLTHROUGH */
+        case '\0':
+            line[nlen++] = '\0';
+            reading = 0;
+            break;
+        case EOF:
+            reading = 0;
+            break;
+        default:
+            line[nlen] = c;
+            ++nlen;
+            break;
+        }
     }
-    char *line = strdup (buffer);
-    size_t nlen = strlen (line);
-    /* remove newline characters */
-    switch (line[nlen - 1])
-    {
-    case '\n':
-        if(nlen >= 2 && line[nlen - 2] == '\r')
-            --nlen;
-    /* FALLTHROUGH */
-    case '\r':
-        line[nlen - 1] = '\0';
-        break;
-    };
+    /* TODO remove extraneous \r|\n|\0 */
+    if(nlen == 0)
+        return NULL;
     return line;
 }
 
@@ -611,7 +625,7 @@ KeyMap_t *parse_confs (Display *ctrl_conn, char **files, size_t n_confs, Bool de
             }
         }
 
-        /* read and parse file */
+        /* Read file line by line, treating each line as an expression */
         char *line = NULL;
         while ((line = read_line (file)) != NULL)
         {
