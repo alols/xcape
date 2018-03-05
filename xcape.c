@@ -151,14 +151,8 @@ int main (int argc, char **argv)
 
     if (optind < argc)
     {
-        if(mapping == default_mapping){
-            conf_files = argv + optind;
-            n_conf = argc - optind;
-        }else{
-            fprintf (stderr, "Not a command line option: '%s'\n", argv[optind]);
-            print_usage (argv[0]);
-            return EXIT_SUCCESS;
-        }
+        conf_files = argv + optind;
+        n_conf = argc - optind;
     }
 
     if (!XInitThreads ())
