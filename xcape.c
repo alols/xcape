@@ -595,7 +595,11 @@ char *read_line (FILE *file)
     }
     /* TODO remove extraneous \r|\n|\0 */
     if(nlen == 0)
+    {
+        free (line);
         return NULL;
+    }
+    line = realloc (line, nlen);
     return line;
 }
 
