@@ -681,6 +681,6 @@ void delete_keys (Key_t *keys)
 
 void print_usage (const char *program_name)
 {
-    fprintf (stdout, "Usage: %s [file] [-d] [-f] [-t timeout_ms] [-e <mapping>]\n", program_name);
+    fprintf (stdout, "Usage: %s [file ...] [-d] [-f] [-t timeout_ms] [-e <mapping>]\n", program_name);
     fprintf (stdout, "Runs as a daemon unless -d or -f flag is set\n");
 }
