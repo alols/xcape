@@ -565,14 +565,15 @@ char *read_line (FILE *file)
     /* TODO read arbitrary line size */
     size_t bufsz = 1024;
     char buffer[bufsz];
-    if (fgets(buffer, bufsz, file) == NULL)
+    if (fgets (buffer, bufsz, file) == NULL)
     {
         return NULL;
     }
-    char *line = strdup(buffer);
-    size_t nlen = strlen(line);
+    char *line = strdup (buffer);
+    size_t nlen = strlen (line);
     /* remove newline characters */
-    switch(line[nlen - 1]){
+    switch (line[nlen - 1])
+    {
     case '\n':
         if(nlen >= 2 && line[nlen - 2] == '\r')
             --nlen;
@@ -580,21 +581,21 @@ char *read_line (FILE *file)
     case '\r':
         line[nlen - 1] = '\0';
         break;
-    }
+    };
     return line;
 }
 
 KeyMap_t *parse_confs (Display *ctrl_conn, char **files, size_t n_confs, Bool debug)
 {
     KeyMap_t *rval = NULL;
-    KeyMap_t **walker = &rval;
-    for(size_t i = 0; i < n_confs; ++i)
+    KeyMap_t **current = &rval;
+    for (size_t i = 0; i < n_confs; ++i)
     {
         Bool close = True;
         char *filename = files[i];
         FILE *file = NULL;
 
-        if(!strcmp(filename, "-"))
+        if (!strcmp (filename, "-"))
         {
             close = False;
             file = stdin;
@@ -612,21 +613,19 @@ KeyMap_t *parse_confs (Display *ctrl_conn, char **files, size_t n_confs, Bool de
 
         /* read and parse file */
         char *line = NULL;
-        while((line = read_line(file)) != NULL)
+        while ((line = read_line (file)) != NULL)
         {
-            *walker = parse_token(ctrl_conn, line, debug);
-            free(line);
-            if(*walker == NULL)
+            *current = parse_token (ctrl_conn, line, debug);
+            free (line);
+            if (*current == NULL)
             {
                 break;
             }
-            walker = &(*walker)->next;
+            current = &(*current)->next;
         }
 
-        if(close)
-        {
+        if (close)
             fclose (file);
-        }
     }
     return rval;
 }
