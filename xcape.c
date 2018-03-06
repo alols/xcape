@@ -578,13 +578,22 @@ char *read_line (FILE *file)
         }
         switch (c)
         {
-        case '\r': /* FALLTHROUGH */
+        case '\r':
+            /* check for \r\n */
+            {
+                int c = fgetc(file);
+                if(c != '\n'){
+                    ungetc(c, file);
+                }
+            }
+            break;
         case '\n': /* FALLTHROUGH */
         case '\0':
             line[nlen++] = '\0';
             reading = 0;
             break;
         case EOF:
+            ungetc(EOF, file);
             reading = 0;
             break;
         default:
@@ -593,12 +602,12 @@ char *read_line (FILE *file)
             break;
         }
     }
-    /* TODO remove extraneous \r|\n|\0 */
     if(nlen == 0)
     {
         free (line);
         return NULL;
     }
+    /* shrink down to size */
     line = realloc (line, nlen);
     return line;
 }
