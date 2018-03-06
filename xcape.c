@@ -99,7 +99,7 @@ int main (int argc, char **argv)
     int dummy, ch;
 
     static char default_mapping[] = "Control_L=Escape";
-    char *mapping = default_mapping;
+    char *mapping = NULL;
     char **conf_files = NULL;
     size_t n_conf = 0;
 
@@ -188,31 +188,58 @@ int main (int argc, char **argv)
         exit (EXIT_FAILURE);
     }
 
-    self->map = parse_mapping (self->ctrl_conn, mapping, self->debug);
+    /* This reduces error-prone logic when rearranging the parsing order */
 
-    if (self->map == NULL)
+    KeyMap_t **current_map = &self->map;
+
+    /* parse mappings given by -e first */
+
+    if (mapping)
     {
-        fprintf (stderr, "Failed to parse_mapping\n");
-        exit (EXIT_FAILURE);
+        KeyMap_t *emap = parse_mapping (self->ctrl_conn, mapping, self->debug);
+
+        if (emap == NULL)
+        {
+            fprintf (stderr, "Failed to parse_mapping\n");
+            exit (EXIT_FAILURE);
+        }
+
+        *current_map = emap;
+        current_map = &(*current_map)->next;
     }
+
+    /* parse config files */
 
     if (conf_files)
     {
         KeyMap_t *conf_map = parse_confs (self->ctrl_conn, conf_files, n_conf, self->debug);
+
         if (conf_map == NULL)
         {
             fprintf (stderr, "Failed to parse_confs\n");
             exit (EXIT_FAILURE);
         }
 
-        if (self->map)
+        *current_map = conf_map;
+        current_map = &(*current_map)->next;
+    }
+
+    /* if there were no config files or mappings supplied, try
+     * the default mapping */
+
+    if (!conf_files && !mapping)
+    {
+        KeyMap_t *def_map = parse_mapping (self->ctrl_conn, default_mapping, self->debug);
+
+        if (def_map == NULL)
         {
-            self->map->next = conf_map;
+            fprintf (stderr, "Failed to parse_mapping default\n");
+            exit (EXIT_FAILURE);
         }
-        else
-        {
-            self->map = conf_map;
-        }
+
+        *current_map = def_map;
+        /* extraneous, but allows rearranging if needed */
+        current_map = &(*current_map)->next;
     }
 
     if (self->foreground != True)
