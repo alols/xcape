@@ -593,7 +593,6 @@ char *read_line (FILE *file)
             reading = 0;
             break;
         case EOF:
-            ungetc(EOF, file);
             reading = 0;
             break;
         default:
