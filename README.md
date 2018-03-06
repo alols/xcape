@@ -36,7 +36,8 @@ Usage
 
 Configuration files containing expressions. Each line is an expression 
 following the form `'ModKey=Key[|OtherKey]`. Comments may be introduced
-via the `'#'` character, which will ignore the proceeding line.
+via the `#` character, which will ignore the proceeding line. To read
+from standard input, you may use the `-` character.
 
 ### `-d`
 
