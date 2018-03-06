@@ -30,7 +30,12 @@ Then run:
 
 Usage
 -----
-    $ xcape [-d] [-f] [-t <timeout ms>] [-e <map-expression>]
+    $ xcape [file ...] [-d] [-f] [-t <timeout ms>] [-e <map-expression>]
+
+### `file ...`
+
+Configuration files containing expressions. Each line is an expression 
+following the form `'ModKey=Key[|OtherKey]`.
 
 ### `-d`
 
