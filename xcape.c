@@ -188,7 +188,8 @@ int main (int argc, char **argv)
         exit (EXIT_FAILURE);
     }
 
-    /* This reduces error-prone logic when rearranging the parsing order */
+    /* This reduces error-prone logic when rearranging the parsing order,
+     * as we don't need to check for self->map existence */
 
     KeyMap_t **current_map = &self->map;
 
@@ -196,15 +197,15 @@ int main (int argc, char **argv)
 
     if (mapping)
     {
-        KeyMap_t *emap = parse_mapping (self->ctrl_conn, mapping, self->debug);
+        KeyMap_t *emapping = parse_mapping (self->ctrl_conn, mapping, self->debug);
 
-        if (emap == NULL)
+        if (emapping == NULL)
         {
             fprintf (stderr, "Failed to parse_mapping\n");
             exit (EXIT_FAILURE);
         }
 
-        *current_map = emap;
+        *current_map = emapping;
         current_map = &(*current_map)->next;
     }
 
@@ -212,15 +213,15 @@ int main (int argc, char **argv)
 
     if (conf_files)
     {
-        KeyMap_t *conf_map = parse_confs (self->ctrl_conn, conf_files, n_conf, self->debug);
+        KeyMap_t *conf_mapping = parse_confs (self->ctrl_conn, conf_files, n_conf, self->debug);
 
-        if (conf_map == NULL)
+        if (conf_mapping == NULL)
         {
             fprintf (stderr, "Failed to parse_confs\n");
             exit (EXIT_FAILURE);
         }
 
-        *current_map = conf_map;
+        *current_map = conf_mapping;
         current_map = &(*current_map)->next;
     }
 
@@ -228,17 +229,15 @@ int main (int argc, char **argv)
 
     if (!conf_files && !mapping)
     {
-        KeyMap_t *def_map = parse_mapping (self->ctrl_conn, default_mapping, self->debug);
+        KeyMap_t *def_mapping = parse_mapping (self->ctrl_conn, default_mapping, self->debug);
 
-        if (def_map == NULL)
+        if (def_mapping == NULL)
         {
             fprintf (stderr, "Failed to parse_mapping default\n");
             exit (EXIT_FAILURE);
         }
 
-        *current_map = def_map;
-        /* extraneous, but allows rearranging if needed */
-        current_map = &(*current_map)->next;
+        *current_map = def_mapping;
     }
 
     if (self->foreground != True)
@@ -623,8 +622,7 @@ char *read_line (FILE *file)
             reading = 0;
             break;
         default:
-            line[nlen] = c;
-            ++nlen;
+            line[nlen++] = c;
             break;
         }
     }
@@ -644,18 +642,16 @@ KeyMap_t *parse_confs (Display *ctrl_conn, char **files, size_t n_confs, Bool de
     KeyMap_t **current = &rval;
     for (size_t i = 0; i < n_confs; ++i)
     {
-        Bool close = True;
         char *filename = files[i];
         FILE *file = NULL;
 
+        /* determine if reading from stdin or file */
         if (!strcmp (filename, "-"))
         {
-            close = False;
             file = stdin;
         }
         else
         {
-            close = True;
             file = fopen (filename, "r");
             if (file == NULL)
             {
@@ -671,7 +667,7 @@ KeyMap_t *parse_confs (Display *ctrl_conn, char **files, size_t n_confs, Bool de
             /* trim leading whitespace */
             char *trimmed = line;
             while(isspace(*trimmed)) ++trimmed;
-            /* check for comments */
+            /* check for comments or empty lines */
             if(*trimmed && *trimmed != '#'){
                 *current = parse_token (ctrl_conn, trimmed, debug);
                 if (*current == NULL)
@@ -683,7 +679,7 @@ KeyMap_t *parse_confs (Display *ctrl_conn, char **files, size_t n_confs, Bool de
             free (line);
         }
 
-        if (close)
+        if (file != stdin)
             fclose (file);
     }
     return rval;
