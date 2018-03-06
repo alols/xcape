@@ -224,8 +224,7 @@ int main (int argc, char **argv)
         current_map = &(*current_map)->next;
     }
 
-    /* if there were no config files or mappings supplied, try
-     * the default mapping */
+    /* if there were no config files or mappings supplied, try the default mapping */
 
     if (!conf_files && !mapping)
     {

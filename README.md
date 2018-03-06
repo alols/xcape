@@ -35,7 +35,8 @@ Usage
 ### `file ...`
 
 Configuration files containing expressions. Each line is an expression 
-following the form `'ModKey=Key[|OtherKey]`.
+following the form `'ModKey=Key[|OtherKey]`. Comments may be introduced
+via the '#' character, which will ignore the proceeding line.
 
 ### `-d`
 
@@ -72,6 +73,16 @@ key name is found.
     released on its own.
 
         xcape -e 'Shift_L=Escape;Control_L=Control_L|O'
+
++   This configuration file produces the same behavior as above.
+    
+        `xcape map.xcape`
+
+        # map.xcape
+        # Map left shift to Escape
+        Shift_L=Escape
+        # Map Left control to Ctrl-O 
+        Control_L=Control_L|O
 
 +   In conjunction with xmodmap it is possible to make an ordinary key act
     as an extra modifier. First map the key to the modifier with xmodmap
