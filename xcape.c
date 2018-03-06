@@ -20,6 +20,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <string.h>
 #include <sys/time.h>
 #include <signal.h>
@@ -641,13 +642,19 @@ KeyMap_t *parse_confs (Display *ctrl_conn, char **files, size_t n_confs, Bool de
         char *line = NULL;
         while ((line = read_line (file)) != NULL)
         {
-            *current = parse_token (ctrl_conn, line, debug);
-            free (line);
-            if (*current == NULL)
-            {
-                break;
+            /* trim leading whitespace */
+            char *trimmed = line;
+            while(isspace(*trimmed)) ++trimmed;
+            /* check for comments */
+            if(*trimmed && *trimmed != '#'){
+                *current = parse_token (ctrl_conn, trimmed, debug);
+                if (*current == NULL)
+                {
+                    break;
+                }
+                current = &(*current)->next;
             }
-            current = &(*current)->next;
+            free (line);
         }
 
         if (close)
