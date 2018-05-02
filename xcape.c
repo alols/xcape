@@ -36,9 +36,20 @@
 /************************************************************************
  * Internal data types
  ***********************************************************************/
+
+typedef unsigned short State_t;
+ 
+typedef struct _Condition_t
+{
+    State_t filter;
+    State_t mask;
+    struct _Condition_t *next;
+} Condition_t;
+
 typedef struct _Key_t
 {
     KeyCode key;
+    Condition_t *conditions;
     struct _Key_t *next;
 } Key_t;
 
@@ -52,6 +63,7 @@ typedef struct _KeyMap_t
     Bool pressed;
     Bool mouse;
     struct timeval down_at;
+    State_t state; 
     struct _KeyMap_t *next;
 } KeyMap_t;
 
@@ -64,6 +76,7 @@ typedef struct _XCape_t
     sigset_t sigset;
     Bool foreground;
     Bool debug;
+    State_t lastState; // stores last known modifier state
     KeyMap_t *map;
     Key_t *generated;
     struct timeval timeout;
@@ -76,15 +89,25 @@ void *sig_handler (void *user_data);
 
 void intercept (XPointer user_data, XRecordInterceptData *data);
 
+Condition_t *parse_condition (Display *dpy, char *condStr, Bool debug);
+
+Condition_t *parse_conditions (Display *dpy, char *condsStr, Bool debug);
+
+Key_t *parse_toKey (Display *dpy, char *token, char *toKeyStr, Bool debug);
+
 KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping, Bool debug);
 
 void delete_mapping (KeyMap_t *map);
 
 Key_t *key_add_key (Key_t *keys, KeyCode key);
 
+void delete_conditions(Condition_t *conds);
+
 void delete_keys (Key_t *keys);
 
 void print_usage (const char *program_name);
+
+void updateState(XCape_t *self);
 
 /************************************************************************
  * Main function
@@ -103,6 +126,7 @@ int main (int argc, char **argv)
 
     self->foreground = False;
     self->debug = False;
+    self->lastState = 0; // might be incorrect for first key press
     self->timeout.tv_sec = 0;
     self->timeout.tv_usec = 500000;
     self->generated = NULL;
@@ -295,6 +319,40 @@ Key_t *key_add_key (Key_t *keys, KeyCode key)
 
     return rval;
 }
+ 
+void updateState(XCape_t *self)
+{
+    XkbStateRec state_r;
+    XkbGetState ( self->ctrl_conn , XkbUseCoreKbd , &state_r);
+
+    // https://www.x.org/releases/X11R7.7/doc/kbproto/xkbproto.html#Computing_A_State_Field_from_an_XKB_State
+    // state_r.ptr_buttons (mouse buttons) seems to be pre-shifted (<<8) and scrolling bits will not been set.
+    self->lastState = ((state_r.group & 0x3)<<13L)
+                            | (state_r.ptr_buttons & 0x700) // pre-shifted
+                            | ((state_r.ptr_buttons & 0x7)<<8) // not pre-shifted
+                            | (state_r.mods & 0xff);
+
+    if (self->debug) 
+        fprintf (stdout,  "  state 0x%x (group %d, buttons 0x%x, modifiers 0x%x)\n",
+                self->lastState, state_r.group+1,
+                ((state_r.ptr_buttons )>>0) | (state_r.ptr_buttons & 0x7),
+                state_r.mods);
+}
+
+// True if no conditions given or at least one fulfilled by state
+Bool matchesState(Key_t *toKey, unsigned int state) 
+{
+    Condition_t *conds = toKey->conditions;
+    
+    if (conds == NULL)
+        return True;
+        
+    for (; conds != NULL; conds = conds->next) {
+        if (((state ^ (conds->filter)) & (conds->mask)) == 0)
+            return True;
+    }
+    return False;
+}
 
 void handle_key (XCape_t *self, KeyMap_t *key,
         Bool mouse_pressed, int key_event)
@@ -306,6 +364,7 @@ void handle_key (XCape_t *self, KeyMap_t *key,
         if (self->debug) fprintf (stdout, "Key pressed!\n");
 
         key->pressed = True;
+        key->state = self->lastState; 
 
         gettimeofday (&key->down_at, NULL);
 
@@ -327,6 +386,9 @@ void handle_key (XCape_t *self, KeyMap_t *key,
             {
                 for (k = key->to_keys; k != NULL; k = k->next)
                 {
+                    if (!matchesState(k, key->state))
+                        continue;
+                                        
                     if (self->debug) fprintf (stdout, "Generating %s!\n",
                             XKeysymToString (XkbKeycodeToKeysym (self->ctrl_conn,
                                     k->key, 0, 0)));
@@ -337,6 +399,9 @@ void handle_key (XCape_t *self, KeyMap_t *key,
                 }
                 for (k = key->to_keys; k != NULL; k = k->next)
                 {
+                    if (!matchesState(k, key->state))
+                        continue;
+
                     XTestFakeKeyEvent (self->ctrl_conn,
                             k->key, False, 0);
                     self->generated = key_add_key (self->generated, k->key);
@@ -412,18 +477,131 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
             }
         }
     }
+   
+    updateState(self);
 
 exit:
     XUnlockDisplay (self->ctrl_conn); 
     XRecordFreeData (data);
 }
 
+Condition_t *parse_condition (Display *dpy, char *condStr, Bool debug)
+{
+    Condition_t       *cond = NULL;
+    char              *filterStr, *maskStr;
+    unsigned short    filter = 0, mask = 0;
+    char              *endptr;
+        
+    maskStr = condStr;
+    filterStr = strsep (&maskStr, ",");
+    
+    if (filterStr != NULL) {
+        errno = 0;
+        filter = strtoul (filterStr, &endptr, 0); /* dec, oct, hex automatically */
+        if (errno != 0 ||strlen(endptr) != 0 || filter < 0 || filter > 0x7FFF) {
+            fprintf (stderr, "  Invalid state filter: %s - skipping condition\n", filterStr);
+            return NULL;
+        }
+    }
+    
+    // default
+    mask = filter;
+    
+    if (maskStr != NULL) {
+        errno = 0;
+        mask = strtoul (maskStr, &endptr, 0) & 0x7FFF; /* dec, oct, hex automatically */
+        if (errno != 0 ||strlen(endptr) != 0 || mask < 0 || mask > 0x7FFF) {
+            fprintf (stderr, "  Invalid state mask: %s - skipping condition\n", maskStr);
+            return NULL;
+        }
+    }
+    
+    cond = malloc(sizeof(Condition_t));
+    cond->filter = filter;
+    cond->mask = mask;
+    cond->next = NULL;
+    
+    return cond;
+}
+
+Condition_t *parse_conditions (Display *dpy, char *condsStr, Bool debug)
+{
+    Condition_t  *firstCond = NULL;
+    Condition_t  **condPtr = &firstCond;
+    char         *condStr, *residualStr;
+        
+    residualStr = condsStr;
+    
+    while (residualStr!=NULL) {
+        condStr = strsep (&residualStr, "?");
+        *condPtr = parse_condition (dpy, condStr, debug);
+        if (*condPtr != NULL)
+            condPtr = &((*condPtr)->next);
+    }
+    
+    return firstCond;
+}
+
+Key_t *parse_toKey (Display *dpy, char *token, char *toKeyStr, Bool debug)
+{
+    Key_t             *key;
+    char              *keyStr, *condsStr;
+    KeySym            ks;
+    KeyCode           code;
+    unsigned long     parsed_code;
+    
+    condsStr = toKeyStr;
+    keyStr = strsep (&condsStr, "?");
+    
+    if (!strncmp (keyStr, "#", 1) && strsep (&keyStr, "#") != NULL)
+    {
+        errno = 0;
+        parsed_code = strtoul (keyStr, NULL, 0); /* dec, oct, hex automatically */
+        if (!(errno == 0
+              && parsed_code <=255
+              && XkbKeycodeToKeysym (dpy, (KeyCode) parsed_code, 0, 0) != NoSymbol)) // TODO: Delete this check?
+        {
+            fprintf (stderr, "  Invalid keycode: %s - skipped\n", keyStr);
+            return NULL;
+        }
+
+        code = (KeyCode) parsed_code;
+    }
+    else
+    {
+        if ((ks = XStringToKeysym (keyStr)) == NoSymbol)
+        {
+            fprintf (stderr, "  Invalid key: %s - skipped\n", keyStr);
+            return NULL;
+        }
+
+        code = XKeysymToKeycode (dpy, ks);
+        if (code == 0)
+        {
+            fprintf (stderr, "WARNING: No keycode found for keysym "
+                    "%s (0x%x) in mapping %s. Ignoring this "
+                    "mapping.\n", keyStr, (unsigned int)ks, token);
+            return NULL;
+        }
+    }
+
+    key = malloc(sizeof(Key_t));
+    key->key = code;
+    key->conditions = NULL;
+    key->next = NULL;
+
+    if (condsStr != NULL) 
+        key->conditions = parse_conditions (dpy, condsStr, debug);
+
+    return key;
+}
+
 KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
 {
+    Key_t    *toKey = NULL, **nextToKeyPtr;
     KeyMap_t *km = NULL;
     KeySym    ks;
-    char      *from, *to, *key;
-    KeyCode   code;           /* keycode */
+    char      *from, *to, *toKeyStr;
     long      parsed_code;    /* parsed keycode value */
 
     to = token;
@@ -439,7 +617,7 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
             parsed_code = strtoul (from, NULL, 0); /* dec, oct, hex automatically */
             if (errno == 0
                    && parsed_code <=255
-                   && XkbKeycodeToKeysym (dpy, (KeyCode) parsed_code, 0, 0) != NoSymbol)
+                   && XkbKeycodeToKeysym (dpy, (KeyCode) parsed_code, 0, 0) != NoSymbol) // TODO: Delete this check?
             {
                 km->UseKeyCode = True;
                 km->from_kc = (KeyCode) parsed_code;
@@ -473,63 +651,47 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
 
             if (debug)
             {
-              fprintf(stderr, "Assigned mapping from \"%s\" ( keysym 0x%x, "
-                      "key code %d)\n",
-                      XKeysymToString (km->from_ks),
-                      (unsigned) km->from_ks,
-                      (unsigned) XKeysymToKeycode (dpy, km->from_ks));
+                fprintf(stderr, "Assigned mapping from \"%s\" ( keysym 0x%x, "
+                    "key code %d)\n",
+                    XKeysymToString (km->from_ks),
+                    (unsigned) km->from_ks,
+                    (unsigned) XKeysymToKeycode (dpy, km->from_ks));
             }
         }
+        
+        nextToKeyPtr = &km->to_keys;
 
         for(;;)
-        {
-            key = strsep (&to, "|");
-            if (key == NULL)
+        {            
+            toKeyStr = strsep (&to, "|");
+            if (toKeyStr == NULL)
                 break;
 
-            if (!strncmp (key, "#", 1)
-                   && strsep (&key, "#") != NULL)
-            {
-                errno = 0;
-                parsed_code = strtoul (key, NULL, 0); /* dec, oct, hex automatically */
-                if (!(errno == 0
-                      && parsed_code <=255
-                      && XkbKeycodeToKeysym (dpy, (KeyCode) parsed_code, 0, 0) != NoSymbol))
-                {
-                    fprintf (stderr, "Invalid keycode: %s\n", key);
-                    return NULL;
-                }
+            toKey = parse_toKey (dpy, token, toKeyStr, debug);
+            if (toKey == NULL)
+                continue;
 
-                code = (KeyCode) parsed_code;
-            }
-            else
-            {
-                if ((ks = XStringToKeysym (key)) == NoSymbol)
-                {
-                    fprintf (stderr, "Invalid key: %s\n", key);
-                    return NULL;
-                }
-
-                code = XKeysymToKeycode (dpy, ks);
-                if (code == 0)
-                {
-                    fprintf (stderr, "WARNING: No keycode found for keysym "
-                            "%s (0x%x) in mapping %s. Ignoring this "
-                            "mapping.\n", key, (unsigned int)ks, token);
-                    return NULL;
-                }
-            }
-
-            km->to_keys = key_add_key (km->to_keys, code);
+            *nextToKeyPtr = toKey;
+            nextToKeyPtr = &((*nextToKeyPtr)->next);
+            
             if (debug)
             {
-              KeySym ks_temp = XkbKeycodeToKeysym (dpy, code, 0, 0);
-              fprintf(stderr, "to \"%s\" (keysym 0x%x, key code %d)\n",
-                  XKeysymToString(ks_temp),
-                  (unsigned) ks_temp,
-                  (unsigned) code);
+                KeySym ks_temp = XkbKeycodeToKeysym (dpy, toKey->key, 0, 0);
+                fprintf(stderr, "to \"%s\" (keysym 0x%x, key code %d)",
+                    XKeysymToString(ks_temp),
+                    (unsigned) ks_temp,
+                    (unsigned) toKey->key);
+                if (toKey->conditions != NULL) {
+                    fprintf(stderr, ", conditions:");
+                    Condition_t *conds = toKey->conditions;
+                    for (; conds != NULL; conds = conds->next)
+                        fprintf(stderr, "  0x%x,0x%x",conds->filter,conds->mask);
+                }
+                fprintf(stderr, "\n");
             }
         }
+        if (km->to_keys == NULL)
+            fprintf(stderr, "failed.\n");
     }
     else
         fprintf (stderr, "WARNING: Mapping without = has no effect: '%s'\n", token);
@@ -578,10 +740,20 @@ void delete_mapping (KeyMap_t *map)
     }
 }
 
+void delete_conditions(Condition_t *conds)
+{
+    while (conds != NULL) {
+        Condition_t *next = conds->next;
+        free (conds);
+        conds = next;
+    }
+}
+
 void delete_keys (Key_t *keys)
 {
     while (keys != NULL) {
         Key_t *next = keys->next;
+        delete_conditions(keys->conditions);
         free (keys);
         keys = next;
     }
