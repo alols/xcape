@@ -77,7 +77,7 @@ void *sig_handler (void *user_data);
 
 void intercept (XPointer user_data, XRecordInterceptData *data);
 
-KeyMap_t *parse_confs (Display *ctrl_conn, char **files, size_t n_confs, Bool debug);
+KeyMap_t *parse_confs (Display *ctrl_conn, const char **files, size_t n_confs, Bool debug);
 
 KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping, Bool debug);
 
@@ -100,8 +100,6 @@ int main (int argc, char **argv)
 
     static char default_mapping[] = "Control_L=Escape";
     char *mapping = NULL;
-    char **conf_files = NULL;
-    size_t n_conf = 0;
 
     XRecordRange *rec_range = XRecordAllocRange();
     XRecordClientSpec client_spec = XRecordAllClients;
@@ -115,10 +113,27 @@ int main (int argc, char **argv)
     rec_range->device_events.first = KeyPress;
     rec_range->device_events.last = ButtonRelease;
 
-    while ((ch = getopt (argc, argv, "dfe:t:")) != -1)
+    /* This array holds the configuration files used, using (argc - 1)/2 because
+     * in the worst case we have (argc - 1)/2 `-c <config>` pairs and no other
+     * arguments. Much less tedious than a resizable array */
+
+    size_t cfgs_size = (argc - 1)/2;
+    const char *cfg_files[cfgs_size];
+    /* NULL out the array */
+    memset(cfg_files, 0, sizeof(const char *) * cfgs_size);
+    /* pointer to current string entry in cfg_files array */
+    const char **cur_cfg = cfg_files;
+    size_t cfgs_supplied = 0;
+
+    while ((ch = getopt (argc, argv, "dfe:t:c:")) != -1)
     {
         switch (ch)
         {
+        case 'c':
+            /* assign passed file to current entry, moving
+             * to the next entry in cfg_files */
+            cur_cfg[cfgs_supplied++] = optarg;
+            break;
         case 'd':
             self->debug = True;
             /* imply -f (no break) */
@@ -148,12 +163,6 @@ int main (int argc, char **argv)
             print_usage (argv[0]);
             return EXIT_SUCCESS;
         }
-    }
-
-    if (optind < argc)
-    {
-        conf_files = argv + optind;
-        n_conf = argc - optind;
     }
 
     if (!XInitThreads ())
@@ -193,6 +202,8 @@ int main (int argc, char **argv)
 
     KeyMap_t **current_map = &self->map;
 
+#define NEXT_MAP(cur) cur = &((*cur)->next)
+
     /* parse mappings given by -e first */
 
     if (mapping)
@@ -206,14 +217,14 @@ int main (int argc, char **argv)
         }
 
         *current_map = emapping;
-        current_map = &(*current_map)->next;
+        NEXT_MAP (current_map);
     }
 
     /* parse config files */
 
-    if (conf_files)
+    if (cfgs_supplied)
     {
-        KeyMap_t *conf_mapping = parse_confs (self->ctrl_conn, conf_files, n_conf, self->debug);
+        KeyMap_t *conf_mapping = parse_confs (self->ctrl_conn, cfg_files, cfgs_supplied, self->debug);
 
         if (conf_mapping == NULL)
         {
@@ -222,12 +233,12 @@ int main (int argc, char **argv)
         }
 
         *current_map = conf_mapping;
-        current_map = &(*current_map)->next;
+        NEXT_MAP (current_map);
     }
 
     /* if there were no config files or mappings supplied, try the default mapping */
 
-    if (!conf_files && !mapping)
+    if (!(cfgs_supplied || mapping))
     {
         KeyMap_t *def_mapping = parse_mapping (self->ctrl_conn, default_mapping, self->debug);
 
@@ -239,6 +250,8 @@ int main (int argc, char **argv)
 
         *current_map = def_mapping;
     }
+
+#undef NEXT_MAP
 
     if (self->foreground != True)
         daemon (0, 0);
@@ -636,28 +649,18 @@ char *read_line (FILE *file)
     return line;
 }
 
-KeyMap_t *parse_confs (Display *ctrl_conn, char **files, size_t n_confs, Bool debug)
+KeyMap_t *parse_confs (Display *ctrl_conn, const char **files, size_t n_confs, Bool debug)
 {
     KeyMap_t *rval = NULL;
     KeyMap_t **current = &rval;
     for (size_t i = 0; i < n_confs; ++i)
     {
-        char *filename = files[i];
-        FILE *file = NULL;
-
-        /* determine if reading from stdin or file */
-        if (!strcmp (filename, "-"))
+        const char *filename = files[i];
+        FILE *file = fopen (filename, "r");
+        if (file == NULL)
         {
-            file = stdin;
-        }
-        else
-        {
-            file = fopen (filename, "r");
-            if (file == NULL)
-            {
-                fprintf (stderr, "unable to open file %s: %s\n", filename, strerror(errno));
-                break;
-            }
+            fprintf (stderr, "unable to open file %s: %s\n", filename, strerror(errno));
+            break;
         }
 
         /* Read file line by line, treating each line as an expression */
@@ -674,13 +677,10 @@ KeyMap_t *parse_confs (Display *ctrl_conn, char **files, size_t n_confs, Bool de
                 {
                     break;
                 }
-                current = &(*current)->next;
+                current = &((*current)->next);
             }
             free (line);
         }
-
-        if (file != stdin)
-            fclose (file);
     }
     return rval;
 }
