@@ -30,14 +30,7 @@ Then run:
 
 Usage
 -----
-    $ xcape [file ...] [-d] [-f] [-t <timeout ms>] [-e <map-expression>]
-
-### `file ...`
-
-Configuration files containing expressions. Each line is an expression 
-following the form `'ModKey=Key[|OtherKey]`. Comments may be introduced
-via the `#` character, which will ignore the proceeding line. To read
-from standard input, you may use the `-` character.
+    $ xcape [-d] [-f] [-c <config-file>] [-t <timeout ms>] [-e <map-expression>]
 
 ### `-d`
 
@@ -46,6 +39,14 @@ Debug mode. Does not fork into the background. Prints debug information.
 ### `-f`
 
 Foreground mode. Does not fork into the background.
+
+### `-c <config-file>`
+
+Supply a configuration file to be parsed xcape. Each line is an expression 
+following the form `'ModKey=Key[|OtherKey]`. Comments may be introduced
+via the `#` character, which will ignore the proceeding line. The `-c` option
+can be used multiple times in order to supply multiple configuration files.
+
 
 ### `-t <timeout ms>`
 
