@@ -86,7 +86,7 @@ key name is found.
 
     which can then be read via xcape using the following command
 
-        xcape map.xcape
+        xcape -c map.xcape
 
 +   In conjunction with xmodmap it is possible to make an ordinary key act
     as an extra modifier. First map the key to the modifier with xmodmap
