@@ -590,7 +590,7 @@ char *read_line (FILE *file)
 {
     size_t cap = 1024;
     size_t nlen = 0;
-    char *line = realloc (NULL, cap*sizeof(char));
+    char *line = calloc (cap, sizeof(char));
 
     int c = EOF;
     int reading = 1;
