@@ -650,8 +650,8 @@ char *read_line (FILE *file)
         free (line);
         return NULL;
     }
-    /* terminate the line */
-    line = realloc (line, nlen + 1);
+    /* terminate the line and reduce size */
+    line = realloc (line, (nlen + 1)*sizeof(char));
     line[nlen] = '\0';
     /* shrink down to size */
     return line;
