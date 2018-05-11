@@ -78,10 +78,10 @@ key name is found.
 
 +   This configuration file produces the same behavior as above.
     
-        # map.xcape
-        # Map left shift to Escape
+        -- map.xcape
+        -- Map left shift to Escape
         Shift_L=Escape
-        # Map Left control to Ctrl-O 
+        -- Map Left control to Ctrl-O 
         Control_L=Control_L|O
 
     which can then be read via xcape using the following command
