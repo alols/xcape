@@ -165,6 +165,12 @@ int main (int argc, char **argv)
         }
     }
 
+    /* user supplied more arguments than needed */
+    if(optind != argc){
+        print_usage (argv[0]);
+        return EXIT_SUCCESS;
+    }
+
     if (!XInitThreads ())
     {
         fprintf (stderr, "Failed to initialize threads.\n");
@@ -673,7 +679,7 @@ KeyMap_t *parse_confs (Display *ctrl_conn, const char **files, size_t n_confs, B
             char *trimmed = line;
             while(isspace(*trimmed)) ++trimmed;
             /* check for comments or empty lines */
-            if(*trimmed && *trimmed != '#'){
+            if(*trimmed && strncmp(trimmed, "--", 2)){
                 *current = parse_token (ctrl_conn, trimmed, debug);
                 if (*current == NULL)
                 {
@@ -738,6 +744,6 @@ void delete_keys (Key_t *keys)
 
 void print_usage (const char *program_name)
 {
-    fprintf (stdout, "Usage: %s [file ...] [-d] [-f] [-t timeout_ms] [-e <mapping>]\n", program_name);
+    fprintf (stdout, "Usage: %s [-d] [-f] [-c <config-file>] [-t timeout_ms] [-e <mapping>]\n", program_name);
     fprintf (stdout, "Runs as a daemon unless -d or -f flag is set\n");
 }
