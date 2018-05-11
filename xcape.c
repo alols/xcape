@@ -1,6 +1,6 @@
 /************************************************************************
  * xcape.c
- *
+*
  * Copyright 2015 Albin Olsson
  *
  * This program is free software: you can redistribute it and/or modify
@@ -618,23 +618,23 @@ char *read_line (FILE *file)
         switch (c)
         {
         case '\r':
-            /* check for \r\n */
             {
-                int c = fgetc(file);
-                if(c != '\n'){
-                    ungetc(c, file);
+                int c = fgetc (file);
+                /* check for \r\n */
+                if(c != '\n')
+                {
+                    ungetc (c, file);
+                    break;
                 }
             }
-            break;
+        /* FALLTHROUGH */
         case '\n': /* FALLTHROUGH */
-        case '\0':
-            line[nlen++] = '\0';
-            reading = 0;
-            break;
+        case '\0': /* FALLTHROUGH */
         case EOF:
             reading = 0;
             break;
         default:
+            /* add the character to the line */
             line[nlen++] = c;
             break;
         }
@@ -644,8 +644,10 @@ char *read_line (FILE *file)
         free (line);
         return NULL;
     }
+    /* terminate the line */
+    line = realloc (line, nlen + 1);
+    line[nlen] = '\0';
     /* shrink down to size */
-    line = realloc (line, nlen);
     return line;
 }
 
