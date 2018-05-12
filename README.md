@@ -44,8 +44,9 @@ Foreground mode. Does not fork into the background.
 
 Supply a configuration file to be parsed xcape. Each line is an expression 
 following the form `'ModKey=Key[|OtherKey]`. Comments may be introduced
-via the `#` character, which will ignore the proceeding line. The `-c` option
-can be used multiple times in order to supply multiple configuration files.
+by inserting `--` at the start of the line, which will cause it to be ignored.
+The `-c` option can be used multiple times in order to supply multiple configuration
+files.
 
 
 ### `-t <timeout ms>`
