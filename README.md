@@ -30,7 +30,7 @@ Then run:
 
 Usage
 -----
-    $ xcape [-d] [-f] [-t <timeout ms>] [-e <map-expression>]
+    $ xcape [-d] [-f] [-c <config-file>] [-t <timeout ms>] [-e <map-expression>]
 
 ### `-d`
 
@@ -39,6 +39,15 @@ Debug mode. Does not fork into the background. Prints debug information.
 ### `-f`
 
 Foreground mode. Does not fork into the background.
+
+### `-c <config-file>`
+
+Supply a configuration file to be parsed xcape. Each line is an expression 
+following the form `'ModKey=Key[|OtherKey]`. Comments may be introduced
+by inserting `--` at the start of the line, which will cause it to be ignored.
+The `-c` option can be used multiple times in order to supply multiple configuration
+files.
+
 
 ### `-t <timeout ms>`
 
@@ -67,6 +76,18 @@ key name is found.
     released on its own.
 
         xcape -e 'Shift_L=Escape;Control_L=Control_L|O'
+
++   This configuration file produces the same behavior as above.
+    
+        -- map.xcape
+        -- Map left shift to Escape
+        Shift_L=Escape
+        -- Map Left control to Ctrl-O 
+        Control_L=Control_L|O
+
+    which can then be read via xcape using the following command
+
+        xcape -c map.xcape
 
 +   In conjunction with xmodmap it is possible to make an ordinary key act
     as an extra modifier. First map the key to the modifier with xmodmap

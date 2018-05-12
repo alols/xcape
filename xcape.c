@@ -1,6 +1,6 @@
 /************************************************************************
  * xcape.c
- *
+*
  * Copyright 2015 Albin Olsson
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <string.h>
 #include <sys/time.h>
 #include <signal.h>
@@ -76,6 +77,8 @@ void *sig_handler (void *user_data);
 
 void intercept (XPointer user_data, XRecordInterceptData *data);
 
+KeyMap_t *parse_confs (Display *ctrl_conn, const char **files, size_t n_confs, Bool debug);
+
 KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping, Bool debug);
 
 void delete_mapping (KeyMap_t *map);
@@ -96,7 +99,7 @@ int main (int argc, char **argv)
     int dummy, ch;
 
     static char default_mapping[] = "Control_L=Escape";
-    char *mapping = default_mapping;
+    char *mapping = NULL;
 
     XRecordRange *rec_range = XRecordAllocRange();
     XRecordClientSpec client_spec = XRecordAllClients;
@@ -110,10 +113,27 @@ int main (int argc, char **argv)
     rec_range->device_events.first = KeyPress;
     rec_range->device_events.last = ButtonRelease;
 
-    while ((ch = getopt (argc, argv, "dfe:t:")) != -1)
+    /* This array holds the configuration files used, using (argc - 1)/2 because
+     * in the worst case we have (argc - 1)/2 `-c <config>` pairs and no other
+     * arguments. Much less tedious than a resizable array */
+
+    size_t cfgs_size = (argc - 1)/2;
+    const char *cfg_files[cfgs_size];
+    /* NULL out the array */
+    memset(cfg_files, 0, sizeof(const char *) * cfgs_size);
+    /* pointer to current string entry in cfg_files array */
+    const char **cur_cfg = cfg_files;
+    size_t cfgs_supplied = 0;
+
+    while ((ch = getopt (argc, argv, "dfe:t:c:")) != -1)
     {
         switch (ch)
         {
+        case 'c':
+            /* assign passed file to current entry, moving
+             * to the next entry in cfg_files */
+            cur_cfg[cfgs_supplied++] = optarg;
+            break;
         case 'd':
             self->debug = True;
             /* imply -f (no break) */
@@ -145,9 +165,8 @@ int main (int argc, char **argv)
         }
     }
 
-    if (optind < argc)
-    {
-        fprintf (stderr, "Not a command line option: '%s'\n", argv[optind]);
+    /* user supplied more arguments than needed */
+    if(optind != argc){
         print_usage (argv[0]);
         return EXIT_SUCCESS;
     }
@@ -184,13 +203,61 @@ int main (int argc, char **argv)
         exit (EXIT_FAILURE);
     }
 
-    self->map = parse_mapping (self->ctrl_conn, mapping, self->debug);
+    /* This reduces error-prone logic when rearranging the parsing order,
+     * as we don't need to check for self->map existence */
 
-    if (self->map == NULL)
+    KeyMap_t **current_map = &self->map;
+
+#define NEXT_MAP(cur) cur = &((*cur)->next)
+
+    /* parse mappings given by -e first */
+
+    if (mapping)
     {
-        fprintf (stderr, "Failed to parse_mapping\n");
-        exit (EXIT_FAILURE);
+        KeyMap_t *emapping = parse_mapping (self->ctrl_conn, mapping, self->debug);
+
+        if (emapping == NULL)
+        {
+            fprintf (stderr, "Failed to parse_mapping\n");
+            exit (EXIT_FAILURE);
+        }
+
+        *current_map = emapping;
+        NEXT_MAP (current_map);
     }
+
+    /* parse config files */
+
+    if (cfgs_supplied)
+    {
+        KeyMap_t *conf_mapping = parse_confs (self->ctrl_conn, cfg_files, cfgs_supplied, self->debug);
+
+        if (conf_mapping == NULL)
+        {
+            fprintf (stderr, "Failed to parse_confs\n");
+            exit (EXIT_FAILURE);
+        }
+
+        *current_map = conf_mapping;
+        NEXT_MAP (current_map);
+    }
+
+    /* if there were no config files or mappings supplied, try the default mapping */
+
+    if (!(cfgs_supplied || mapping))
+    {
+        KeyMap_t *def_mapping = parse_mapping (self->ctrl_conn, default_mapping, self->debug);
+
+        if (def_mapping == NULL)
+        {
+            fprintf (stderr, "Failed to parse_mapping default\n");
+            exit (EXIT_FAILURE);
+        }
+
+        *current_map = def_mapping;
+    }
+
+#undef NEXT_MAP
 
     if (self->foreground != True)
         daemon (0, 0);
@@ -438,7 +505,7 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
             errno = 0;
             parsed_code = strtoul (from, NULL, 0); /* dec, oct, hex automatically */
             if (errno == 0
-                   && parsed_code <=255
+                   && parsed_code <= 255
                    && XkbKeycodeToKeysym (dpy, (KeyCode) parsed_code, 0, 0) != NoSymbol)
             {
                 km->UseKeyCode = True;
@@ -538,6 +605,94 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
     return km;
 }
 
+char *read_line (FILE *file)
+{
+    size_t cap = 1024;
+    size_t nlen = 0;
+    char *line = calloc (cap, sizeof(char));
+
+    int c = EOF;
+    int reading = 1;
+    while (reading)
+    {
+        c = fgetc(file);
+        if (nlen == cap)
+        {
+            cap *= 2;
+            line = realloc (line, cap*sizeof(char));
+        }
+        switch (c)
+        {
+        case '\r':
+            {
+                int c = fgetc (file);
+                /* check for \r\n */
+                if(c != '\n')
+                {
+                    ungetc (c, file);
+                    break;
+                }
+            }
+        /* FALLTHROUGH */
+        case '\n': /* FALLTHROUGH */
+        case '\0': /* FALLTHROUGH */
+        case EOF:
+            reading = 0;
+            break;
+        default:
+            /* add the character to the line */
+            line[nlen++] = c;
+            break;
+        }
+    }
+    if(nlen == 0)
+    {
+        free (line);
+        return NULL;
+    }
+    /* terminate the line and reduce size */
+    line = realloc (line, (nlen + 1)*sizeof(char));
+    line[nlen] = '\0';
+    /* shrink down to size */
+    return line;
+}
+
+KeyMap_t *parse_confs (Display *ctrl_conn, const char **files, size_t n_confs, Bool debug)
+{
+    KeyMap_t *rval = NULL;
+    KeyMap_t **current = &rval;
+    for (size_t i = 0; i < n_confs; ++i)
+    {
+        const char *filename = files[i];
+        FILE *file = fopen (filename, "r");
+        if (file == NULL)
+        {
+            fprintf (stderr, "unable to open file %s: %s\n", filename, strerror(errno));
+            break;
+        }
+
+        /* Read file line by line, treating each line as an expression */
+        char *line = NULL;
+        while ((line = read_line (file)) != NULL)
+        {
+            /* trim leading whitespace */
+            char *trimmed = line;
+            while(isspace(*trimmed)) ++trimmed;
+            /* check for comments or empty lines */
+            if(*trimmed && strncmp(trimmed, "--", 2)){
+                *current = parse_token (ctrl_conn, trimmed, debug);
+                if (*current == NULL)
+                {
+                    break;
+                }
+                current = &((*current)->next);
+            }
+            free (line);
+        }
+    }
+    return rval;
+}
+
 KeyMap_t *parse_mapping (Display *ctrl_conn, char *mapping, Bool debug)
 {
     char     *token;
@@ -589,6 +744,6 @@ void delete_keys (Key_t *keys)
 
 void print_usage (const char *program_name)
 {
-    fprintf (stdout, "Usage: %s [-d] [-f] [-t timeout_ms] [-e <mapping>]\n", program_name);
+    fprintf (stdout, "Usage: %s [-d] [-f] [-c <config-file>] [-t timeout_ms] [-e <mapping>]\n", program_name);
     fprintf (stdout, "Runs as a daemon unless -d or -f flag is set\n");
 }
