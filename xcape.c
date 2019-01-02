@@ -278,6 +278,21 @@ void handle_key(XCape_t *self, KeyMap_t *key, Bool mouse_pressed,
     if (self->debug)
       fprintf(stdout, "Key pressed!\n");
 
+
+    char buf[32], *keys = buf;
+    XQueryKeymap(self->ctrl_conn, keys);
+    if ((BIT(keys, 50) || BIT(keys, 62)) && key->from_kc == 100)
+    {
+      XTestFakeKeyEvent(self->ctrl_conn, 22, True, 0);
+      /* XTestFakeKeyEvent(self->ctrl_conn, 22, False, 0); */
+      self->generated = key_add_key(self->generated, 22);
+      XFlush(self->ctrl_conn);
+      key->pressed = True;
+      key->used = True;
+      key->mouse = True;
+      return;
+    }
+
     key->pressed = True;
 
     gettimeofday(&key->down_at, NULL);
@@ -288,7 +303,14 @@ void handle_key(XCape_t *self, KeyMap_t *key, Bool mouse_pressed,
   } else {
     if (self->debug)
       fprintf(stdout, "Key released!\n");
-    if (key->used == False) {
+    if (key->mouse)
+    {
+      XTestFakeKeyEvent(self->ctrl_conn, 22, False, 0);
+      self->generated = key_add_key(self->generated, 22);
+      XFlush(self->ctrl_conn);
+      key->mouse = False;
+    }
+    else if (key->used == False) {
       struct timeval timev = self->timeout;
       gettimeofday(&timev, NULL);
       timersub(&timev, &key->down_at, &timev);
