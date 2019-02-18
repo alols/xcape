@@ -175,6 +175,7 @@ int main(int argc, char **argv) {
 
   if (self->debug != True)
     daemon(0, 0);
+  self->debug = False;
 
   sigemptyset(&self->sigset);
   sigaddset(&self->sigset, SIGINT);
@@ -281,7 +282,7 @@ void handle_key(XCape_t *self, KeyMap_t *key, Bool mouse_pressed,
 
     char buf[32], *keys = buf;
     XQueryKeymap(self->ctrl_conn, keys);
-    if ((BIT(keys, 50) || BIT(keys, 62)) && key->from_kc == 100)
+    if (!key->UseModifier && (BIT(keys, 50) || BIT(keys, 62)) && key->from_kc == 100)
     {
       XTestFakeKeyEvent(self->ctrl_conn, 22, True, 0);
       /* XTestFakeKeyEvent(self->ctrl_conn, 22, False, 0); */
