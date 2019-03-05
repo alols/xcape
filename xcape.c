@@ -166,7 +166,7 @@ int main (int argc, char **argv)
 
     XkbGetState (self->data_conn, XkbUseCoreKbd, &state);
     self->intended_group = state.group;
-    self->previous_group = state.group;
+    self->previous_group = -1;
 
     if (!self->data_conn || !self->ctrl_conn)
     {
