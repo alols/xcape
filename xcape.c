@@ -67,6 +67,8 @@ typedef struct _XCape_t
     KeyMap_t *map;
     Key_t *generated;
     struct timeval timeout;
+    unsigned char intended_group;
+    unsigned char previous_group;
 } XCape_t;
 
 /************************************************************************
@@ -100,6 +102,7 @@ int main (int argc, char **argv)
 
     XRecordRange *rec_range = XRecordAllocRange();
     XRecordClientSpec client_spec = XRecordAllClients;
+    XkbStateRec state;
 
     self->foreground = False;
     self->debug = False;
@@ -160,6 +163,10 @@ int main (int argc, char **argv)
 
     self->data_conn = XOpenDisplay (NULL);
     self->ctrl_conn = XOpenDisplay (NULL);
+
+    XkbGetState (self->data_conn, XkbUseCoreKbd, &state);
+    self->intended_group = state.group;
+    self->previous_group = -1;
 
     if (!self->data_conn || !self->ctrl_conn)
     {
@@ -354,6 +361,11 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
     XCape_t *self = (XCape_t*)user_data;
     static Bool mouse_pressed = False;
     KeyMap_t *km;
+    XkbStateRec state;
+    unsigned char current_group;
+
+    XkbGetState (self->ctrl_conn, XkbUseCoreKbd, &state);
+    current_group = state.group;
 
     XLockDisplay (self->ctrl_conn);
 
@@ -412,6 +424,18 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
             }
         }
     }
+
+    if (self->previous_group != current_group)
+    {
+        self->intended_group = current_group;
+
+        if (self->debug)
+            fprintf (stdout, "Changed group to %d\n", current_group);
+    }
+
+    XkbLockGroup (self->ctrl_conn, XkbUseCoreKbd, self->intended_group);
+    XkbGetState (self->ctrl_conn, XkbUseCoreKbd, &state);
+    self->previous_group = state.group;
 
 exit:
     XUnlockDisplay (self->ctrl_conn); 
