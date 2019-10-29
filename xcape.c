@@ -61,18 +61,26 @@ typedef struct _XCape_t
     Display *ctrl_conn;
     XRecordContext record_ctx;
     pthread_t sigwait_thread;
+    pthread_t group_thread;
     sigset_t sigset;
     Bool foreground;
     Bool debug;
     KeyMap_t *map;
+    KeyMap_t *std_map;
+    KeyMap_t *grp_maps[10];
     Key_t *generated;
     struct timeval timeout;
+    Bool running;
+    int group;
+    int xkb_event_type;
 } XCape_t;
 
 /************************************************************************
  * Internal function declarations
  ***********************************************************************/
 void *sig_handler (void *user_data);
+
+void *grp_handler (void *user_data);
 
 void intercept (XPointer user_data, XRecordInterceptData *data);
 
@@ -97,20 +105,23 @@ int main (int argc, char **argv)
 
     static char default_mapping[] = "Control_L=Escape";
     char *mapping = default_mapping;
+    char *grp_mappings[10] = { NULL };
 
     XRecordRange *rec_range = XRecordAllocRange();
     XRecordClientSpec client_spec = XRecordAllClients;
+    XkbStateRec xkb_state;
 
     self->foreground = False;
     self->debug = False;
     self->timeout.tv_sec = 0;
     self->timeout.tv_usec = 500000;
     self->generated = NULL;
+    self->running = True;
 
     rec_range->device_events.first = KeyPress;
     rec_range->device_events.last = ButtonRelease;
 
-    while ((ch = getopt (argc, argv, "dfe:t:")) != -1)
+    while ((ch = getopt (argc, argv, "dfe:t:0:1:2:3:4:5:6:7:8:9:")) != -1)
     {
         switch (ch)
         {
@@ -138,6 +149,10 @@ int main (int argc, char **argv)
                     return EXIT_FAILURE;
                 }
             }
+            break;
+        case '0': case '1': case '2': case '3': case '4':
+        case '5': case '6': case '7': case '8': case '9':
+            grp_mappings[ch - '0'] = optarg;
             break;
         default:
             print_usage (argv[0]);
@@ -177,20 +192,41 @@ int main (int argc, char **argv)
         fprintf (stderr, "Failed to obtain xrecord version\n");
         exit (EXIT_FAILURE);
     }
-    if (!XkbQueryExtension (self->ctrl_conn, &dummy, &dummy,
+    if (!XkbQueryExtension (self->ctrl_conn, &dummy, &self->xkb_event_type,
             &dummy, &dummy, &dummy))
     {
         fprintf (stderr, "Failed to obtain xkb version\n");
         exit (EXIT_FAILURE);
     }
-
-    self->map = parse_mapping (self->ctrl_conn, mapping, self->debug);
-
-    if (self->map == NULL)
+    if (!XkbSelectEvents (self->ctrl_conn, XkbUseCoreKbd, XkbAllEventsMask, XkbAllEventsMask))
     {
-        fprintf (stderr, "Failed to parse_mapping\n");
+        fprintf (stderr, "Failed to select xkb events\n");
         exit (EXIT_FAILURE);
     }
+
+    self->std_map = parse_mapping (self->ctrl_conn, mapping, self->debug);
+    if (self->std_map == NULL)
+    {
+        fprintf (stderr, "Failed to parse_mapping for '-e'\n");
+        exit (EXIT_FAILURE);
+    }
+    memset (self->grp_maps, 0, sizeof (self->grp_maps));
+    for (int i = 0; i < 10; i++)
+    {
+        if (grp_mappings[i])
+        {
+            self->grp_maps[i] = parse_mapping (self->ctrl_conn, grp_mappings[i], self->debug);
+            if (self->grp_maps[i] == NULL)
+            {
+                fprintf (stderr, "Failed to parse_mapping for '-%d'\n", i);
+                exit (EXIT_FAILURE);
+            }
+        }
+    }
+
+    XkbGetState (self->ctrl_conn, XkbUseCoreKbd, &xkb_state);
+    self->group = xkb_state.group;
+    self->map = self->grp_maps[self->group] ? self->grp_maps[self->group] : self->std_map;
 
     if (self->foreground != True)
         daemon (0, 0);
@@ -202,6 +238,8 @@ int main (int argc, char **argv)
 
     pthread_create (&self->sigwait_thread,
             NULL, sig_handler, self);
+    pthread_create (&self->group_thread,
+            NULL, grp_handler, self);
 
     self->record_ctx = XRecordCreateContext (self->ctrl_conn,
             0, &client_spec, 1, &rec_range, 1);
@@ -222,6 +260,7 @@ int main (int argc, char **argv)
     }
 
     pthread_join (self->sigwait_thread, NULL);
+    pthread_join (self->group_thread, NULL);
 
     if (!XRecordFreeContext (self->ctrl_conn, self->record_ctx))
     {
@@ -235,7 +274,14 @@ int main (int argc, char **argv)
     XCloseDisplay (self->ctrl_conn);
     XCloseDisplay (self->data_conn);
 
-    delete_mapping (self->map);
+    delete_mapping (self->std_map);
+    for (int i = 0; i < 10; i++)
+    {
+        if (self->grp_maps[i])
+        {
+            delete_mapping (self->grp_maps[i]);
+        }
+    }
 
     free (self);
 
@@ -266,11 +312,57 @@ void *sig_handler (void *user_data)
         exit(EXIT_FAILURE);
     }
 
+    self->running = False;
+
     XSync (self->ctrl_conn, False);
 
     XUnlockDisplay (self->ctrl_conn);
 
     if (self->debug) fprintf (stdout, "sig_handler exiting...\n");
+
+    return NULL;
+}
+
+void *grp_handler (void *user_data)
+{
+    XCape_t *self = (XCape_t*)user_data;
+    XEvent event;
+    int x11_fd;
+    fd_set in_fds;
+    struct timeval tv;
+
+    x11_fd = ConnectionNumber (self->ctrl_conn);
+
+    while (self->running)
+    {
+        FD_ZERO (&in_fds);
+        FD_SET (x11_fd, &in_fds);
+
+        tv.tv_usec = 0;
+        tv.tv_sec = 1;
+
+        select (x11_fd + 1, &in_fds, NULL, NULL, &tv); /* wait for X event or timer */
+
+        while (XPending (self->ctrl_conn))
+        {
+            XNextEvent (self->ctrl_conn, &event);
+
+            if (event.type == self->xkb_event_type)
+            {
+                XkbEvent* xkb_event = (XkbEvent*) &event;
+                if (xkb_event->any.xkb_type == XkbStateNotify)
+                {
+                    if (xkb_event->state.group != self->group)
+                    {
+                        XLockDisplay (self->ctrl_conn);
+                        self->group = xkb_event->state.group;
+                        self->map = self->grp_maps[self->group] ? self->grp_maps[self->group] : self->std_map;
+                        XUnlockDisplay (self->ctrl_conn);
+                    }
+                }
+            }
+        }
+    }
 
     return NULL;
 }

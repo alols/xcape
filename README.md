@@ -47,6 +47,8 @@ event. Default is 500 ms.
 
 ### `-e <map-expression>`
 
+### `-[0-9] <map-expression>`
+
 The expression has the grammar `'ModKey=Key[|OtherKey][;NextExpression]'`
 
 The list of key names is found in the header file `X11/keysymdef.h` (remove
@@ -59,6 +61,13 @@ have a key with "{" above "[").
 You can also specify keys in decimal (prefix `#`), octal (`#0`), or
 hexadecimal (`#0x`). They will be interpreted as keycodes unless no corresponding
 key name is found.
+
+If you have multiple keyboard layouts configured (for example in your Xorg config:
+`Option "XkbLayout" "cz,us"`) you can have different mappings for each layout.
+To set the map expression for the first layout use `-0` and for the second
+layout use `-1`. When no expression was specified for the active layout xcape
+uses the `-e` expression as a fallback. Beware that with multiple layouts you
+might need to use keycodes instead of keysyms to unambiguously specify keys.
 
 #### Examples
 
@@ -94,6 +103,12 @@ key name is found.
 
         # Finally use xcape to cause the space bar to generate a space when tapped.
         xcape -e "$spare_modifier=space"
+
++   You have Caps Lock and Left Control swapped only on your first layout but
+    not on your second one. On both layouts the key acting as Left Control should
+    generate the Escape key when pressed and released on its own.
+
+        xcape -0 '#66=Escape' -1 '#37=Escape'
 
 
 Note regarding xmodmap

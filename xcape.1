@@ -29,6 +29,9 @@ Give a \fItimeout\fR in milliseconds.  If you hold a key longer than
 .TP
 .BR \-e " " \fImap-expression\fR
 Use \fImap-expression\fR as the expression(s).
+.TP
+.BR \-[0-9] " " \fImap-expression\fR
+Use \fImap-expression\fR on the n-th keyboard layout.
 
 .SH EXPRESSION SYNTAX
 Expression syntax is \'\fBModKey\fR=\fBKey\fR[|\fBOtherKey\fR]\'.  Multiple
@@ -43,10 +46,20 @@ generate "\fI{\fR" the expression
 \'\fIModKey\fR=\fIShift_L\fR|\fIbracketleft\fR\' could be used
 (assuming that you have a key with \'{\' above \'[\').
 .PP
-You can also specify \fBModKey\fR in decimal (prefix \fI#\fR), octal
-(\fI#0\fR), or hexadecimal (\fI#0x\fR). It will be interpreted as a keycode
+You can also specify keys in decimal (prefix \fI#\fR), octal
+(\fI#0\fR), or hexadecimal (\fI#0x\fR). They will be interpreted as keycodes
 unless no corresponding key name is
 found.
+.PP
+If you have multiple keyboard layouts configured
+(for example in your Xorg config: \'\fIOption\fR "\fIXkbLayout\fR" "\fIcz,us\fR"\')
+you can have different mappings for each layout.
+To set the map expression for the first layout use \fB-0\fR
+and for the second layout use \fB-1\fR.
+When no expression was specified for the active layout xcape
+uses the \fB-e\fR expression as a fallback.
+Beware that with multiple layouts you
+might need to use keycodes instead of keysyms to unambiguously specify keys.
 
 .SH EXAMPLES
 .PP
@@ -86,6 +99,13 @@ Finally use \fBxcape\fR to cause the space bar to generate a space when tapped.
 .PP
 .RS
 \fBxcape\fR \fB-e\fR "\fI$spare_modifier\fR=\fIspace\fR"
+.RE
+.PP
+You have Caps Lock and Left Control swapped only on your first layout but
+not on your second one. On both layouts the key acting as Left Control should
+generate the Escape key when pressed and released on its own.
+.RS
+\fBxcape\fR \fB-0\fR '\fI#66\fR=\fIEscape\fR' \fB-1\fR '\fI#37\fR=\fIEscape\fR'
 .RE
 
 .SH SEE ALSO
