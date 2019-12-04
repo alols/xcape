@@ -4,7 +4,7 @@ MANDIR?=/man/man1
 
 TARGET := xcape
 
-CFLAGS += -Wall
+CFLAGS += -Wall -g -O0
 CFLAGS += `pkg-config --cflags xtst x11`
 LDFLAGS += `pkg-config --libs xtst x11`
 LDFLAGS += -pthread
