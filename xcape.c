@@ -313,21 +313,12 @@ void handle_key(XCape_t* self, KeyMap_t* key, Bool mouse_pressed, int key_event)
             if (timercmp(&timev, &self->timeout, <)) {
                 char buf[32], *keys = buf;
                 XQueryKeymap(self->ctrl_conn, keys);
-                if (key->UseModifier) {
-                    if (!BIT(keys, XKeysymToKeycode(self->ctrl_conn, key->modifier))) {
-                        goto skip;
-                    }
-                } else if (key->UseModifierCode) {
-                    if (!BIT(keys, key->modifier_code)) {
-                        goto skip;
-                    }
+                printf("keys[12] = %d\n", keys[12]);
+                if (keys[12])
+                {
+                    XTestFakeKeyEvent(self->ctrl_conn, 50, True, 0);
+                    self->generated = key_add_key(self->generated, 50);
                 }
-                /* else { */
-                /*   for (int i = 0; i < 32; i++) */
-                /*     if (keys[i]) */
-                /*       goto skip; */
-                /* } */
-                /* if (key->from_kc == 108) system("copyq select 0"); */
                 for (k = key->to_keys; k != NULL; k = k->next) {
                     if (self->debug)
                         fprintf(stdout, "Generating %s!\n",
@@ -336,6 +327,11 @@ void handle_key(XCape_t* self, KeyMap_t* key, Bool mouse_pressed, int key_event)
                     XTestFakeKeyEvent(self->ctrl_conn, k->key, True, 0);
                     self->generated = key_add_key(self->generated, k->key);
                 }
+                if (keys[12])
+                {
+                    XTestFakeKeyEvent(self->ctrl_conn, 50, False, 0);
+                    self->generated = key_add_key(self->generated, 50);
+                }
                 for (k = key->to_keys; k != NULL; k = k->next) {
                     XTestFakeKeyEvent(self->ctrl_conn, k->key, False, 0);
                     self->generated = key_add_key(self->generated, k->key);
@@ -343,7 +339,6 @@ void handle_key(XCape_t* self, KeyMap_t* key, Bool mouse_pressed, int key_event)
                 XFlush(self->ctrl_conn);
             }
         }
-    skip:
         key->used = False;
         key->pressed = False;
     }
