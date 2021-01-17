@@ -50,6 +50,8 @@ typedef struct _KeyMap_t
     Key_t *to_keys;
     Bool used;
     Bool pressed;
+    unsigned int shift_level;
+    unsigned int shift_group;
     Bool mouse;
     struct timeval down_at;
     struct _KeyMap_t *next;
@@ -319,30 +321,77 @@ void handle_key (XCape_t *self, KeyMap_t *key,
         if (self->debug) fprintf (stdout, "Key released!\n");
         if (key->used == False)
         {
-            struct timeval timev = self->timeout;
-            gettimeofday (&timev, NULL);
-            timersub (&timev, &key->down_at, &timev);
+			//TODO find a better way to include custom added groups *eventually*
+			char currentshiftlevel;
+			char currentshiftgroup;
 
-            if (timercmp (&timev, &self->timeout, <))
-            {
-                for (k = key->to_keys; k != NULL; k = k->next)
-                {
-                    if (self->debug) fprintf (stdout, "Generating %s!\n",
-                            XKeysymToString (XkbKeycodeToKeysym (self->ctrl_conn,
-                                    k->key, 0, 0)));
+			//check for shift key
+			unsigned int KeyValue = 0xFFE1;
+			for (int a=0; a<1; a++) {
+				Display* dpy = XOpenDisplay(NULL);
+				char keys_return[32];
+				XQueryKeymap( dpy, keys_return );
+				KeyCode kc2 = XKeysymToKeycode( dpy, KeyValue );
+				char bShiftPressed = !!( keys_return[ kc2>>3 ] & ( 1<<(kc2&7) ) );
+				//printf("%x is %sbeing held\n", KeyValue, bShiftPressed ? "" : "not ");
+				XCloseDisplay(dpy);
+				if (bShiftPressed){
+					currentshiftlevel = 1;
+					break;
+				}
+				else {
+					KeyValue = 0xFFE2;
+					currentshiftlevel = 0;
+				}
+			}
+			//check for Mode_switch key
+			KeyValue = 0xFF7E;
+			Display* dpy = XOpenDisplay(NULL);
+			char keys_return[32];
+			XQueryKeymap( dpy, keys_return );
+			KeyCode kc2 = XKeysymToKeycode( dpy, KeyValue );
+			char bShiftPressed = !!( keys_return[ kc2>>3 ] & ( 1<<(kc2&7) ) );
+			//printf("%x is %sbeing held\n", KeyValue, bShiftPressed ? "" : "not ");
+			XCloseDisplay(dpy);
+			if (bShiftPressed){
+				currentshiftgroup = 1;
+			}
+			else {
+				currentshiftgroup = 0;
+			}
 
-                    XTestFakeKeyEvent (self->ctrl_conn,
-                            k->key, True, 0);
-                    self->generated = key_add_key (self->generated, k->key);
-                }
-                for (k = key->to_keys; k != NULL; k = k->next)
-                {
-                    XTestFakeKeyEvent (self->ctrl_conn,
-                            k->key, False, 0);
-                    self->generated = key_add_key (self->generated, k->key);
-                }
-                XFlush (self->ctrl_conn);
-            }
+			if (key->shift_level == currentshiftlevel
+				&& key ->shift_group == currentshiftgroup)
+			{
+
+				struct timeval timev = self->timeout;
+				gettimeofday (&timev, NULL);
+				timersub (&timev, &key->down_at, &timev);
+
+				if (timercmp (&timev, &self->timeout, <))
+				{
+					for (k = key->to_keys; k != NULL; k = k->next)
+					{
+						if (self->debug) fprintf (stdout, "Generating %s!\n",
+								XKeysymToString (XkbKeycodeToKeysym (self->ctrl_conn,
+										k->key, 0, 0)));
+
+						XTestFakeKeyEvent (self->ctrl_conn,
+								k->key, True, 0);
+						self->generated = key_add_key (self->generated, k->key);
+					}
+					for (k = key->to_keys; k != NULL; k = k->next)
+					{
+						XTestFakeKeyEvent (self->ctrl_conn,
+								k->key, False, 0);
+						self->generated = key_add_key (self->generated, k->key);
+					}
+					XFlush (self->ctrl_conn);
+				}
+			}
+			else {
+				if (self->debug) fprintf (stdout, "Wrong Kslag!\n (shift level is %d, but is expecting %d)\n (shift group is %d, but is expecting %d)\n", currentshiftlevel, key->shift_level, currentshiftgroup, key->shift_group);
+			}
         }
         key->used = False;
         key->pressed = False;
@@ -414,7 +463,7 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
     }
 
 exit:
-    XUnlockDisplay (self->ctrl_conn); 
+    XUnlockDisplay (self->ctrl_conn);
     XRecordFreeData (data);
 }
 
@@ -432,25 +481,50 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
     {
         km = calloc (1, sizeof (KeyMap_t));
 
+
         if (!strncmp (from, "#", 1)
                && strsep (&from, "#") != NULL)
         {
             errno = 0;
             parsed_code = strtoul (from, NULL, 0); /* dec, oct, hex automatically */
+
+			//check for Kslag - delimiter
+			if (strchr(from, '-') != NULL && strsep (&from, "-") != NULL)
+			{
+				//load the - number
+				long temp_slag = strtoul (from, NULL, 0);  //dec, oct, hex automatically
+				//fprintf(stderr, "temp_slag is %ld\n", temp_slag);
+
+				//convert slag to group and level
+				while(temp_slag>1)
+				{
+					km->shift_group++;
+					temp_slag -= 2;
+				}
+				km->shift_level = temp_slag;
+				//fprintf(stderr, "shift level is %d, shift group is %d\n", km->shift_level, km->shift_group);
+			}
+			else {
+				//fprintf(stderr, "No provided shift level\n");
+			}
+
             if (errno == 0
                    && parsed_code <=255
-                   && XkbKeycodeToKeysym (dpy, (KeyCode) parsed_code, 0, 0) != NoSymbol)
+                   && XkbKeycodeToKeysym (dpy, (KeyCode) parsed_code, km->shift_level, km->shift_group) != NoSymbol)
             {
                 km->UseKeyCode = True;
                 km->from_kc = (KeyCode) parsed_code;
                 if (debug)
                 {
-                  KeySym ks_temp = XkbKeycodeToKeysym (dpy, (KeyCode) parsed_code, 0, 0);
+                  KeySym ks_temp = XkbKeycodeToKeysym (dpy, (KeyCode) parsed_code, km->shift_group, km->shift_level);
                   fprintf(stderr, "Assigned mapping from \"%s\" ( keysym 0x%x, "
-                          "key code %d)\n",
+                          "key code %d, shift group %d, shift level %d)\n",
                           XKeysymToString(ks_temp),
                           (unsigned) ks_temp,
-                          (unsigned) km->from_kc);
+                          (unsigned) km->from_kc,
+						  km->shift_group,
+						  km->shift_level
+						  );
                 }
             }
             else
@@ -466,6 +540,7 @@ KeyMap_t *parse_token (Display *dpy, char *token, Bool debug)
                 fprintf (stderr, "Invalid key: %s\n", token);
                 return NULL;
             }
+
 
             km->UseKeyCode  = False;
             km->from_ks     = ks;
