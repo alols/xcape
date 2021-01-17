@@ -44,10 +44,12 @@ generate "\fI{\fR" the expression
 (assuming that you have a key with \'{\' above \'[\').
 .PP
 You can also specify \fBModKey\fR in decimal (prefix \fI#\fR), octal
-(\fI#0\fR), or hexadecimal (\fI#0x\fR). It will be interpreted as a keycode unless no coresponding key name is found.
+(\fI#0\fR), or hexadecimal (\fI#0x\fR). It will be interpreted as a keycode if no coresponding key name is found.
 
-When specifying the Modkey using numbers, is is possible to also set the kslag (Keycode Shift Level And Group) by following the number with a \f\-\fR and the keysys column. It will be interpreted as a keycode unless no corresponding key name is
+When specifying the Modkey using numbers, is is possible to also set the kslag (Keycode Shift Level And Group) by following the number with a \f\\-\fR and the keysys column number. It will be interpreted as a keycode if no corresponding key name is
 found.
+
+If a keysys column number is not defined, it will always return as 0.
 
 .SH EXAMPLES
 .PP
