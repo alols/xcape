@@ -92,6 +92,11 @@ void print_usage (const char *program_name);
 int main (int argc, char **argv)
 {
     XCape_t *self = malloc (sizeof (XCape_t));
+    if (self == NULL)
+    {
+        fprintf (stderr, "Call to malloc failed. Could not allocate memory for XCape_t.\n");
+        return EXIT_FAILURE;
+    }
 
     int dummy, ch;
 
@@ -414,7 +419,7 @@ void intercept (XPointer user_data, XRecordInterceptData *data)
     }
 
 exit:
-    XUnlockDisplay (self->ctrl_conn); 
+    XUnlockDisplay (self->ctrl_conn);
     XRecordFreeData (data);
 }
 
